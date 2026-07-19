@@ -1,24 +1,42 @@
 from __future__ import annotations
 
-import asyncio
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
 from eitaa_cli import __version__
+from eitaa_cli.cli.auth import auth_app
+from eitaa_cli.cli.explore import explore_app
+from eitaa_cli.cli.runtime import (
+    CLIState,
+    console,
+)
+from eitaa_cli.cli.runtime import (
+    run as _run,
+)
+from eitaa_cli.cli.runtime import (
+    state as _state,
+)
+from eitaa_cli.cli.runtime import (
+    with_client as _with_client,
+)
 from eitaa_cli.client import EitaaClient
 from eitaa_cli.config import EitaaSettings
-from eitaa_cli.errors import EitaaError
-from eitaa_cli.formatting import entity_title, print_dialogs, print_json, print_messages
+from eitaa_cli.formatting import (
+    entity_title,
+    print_dialogs,
+    print_entities,
+    print_json,
+    print_messages,
+    print_participants,
+)
+from eitaa_cli.models.search import ChatSearchFilter, ParticipantFilter
 from eitaa_cli.services.auth import normalize_phone
 from eitaa_cli.services.messages import random_long
 from eitaa_cli.services.peers import entity_to_input_peer
-from eitaa_cli.session import SessionStore
 from eitaa_cli.tl import TLSchema
 from eitaa_cli.tl.export import export_schema_files
 
@@ -27,7 +45,6 @@ app = typer.Typer(
     invoke_without_command=True,
     help="Direct Eitaa Web-compatible Python CLI.",
 )
-auth_app = typer.Typer(no_args_is_help=True, help="OTP login, signup, and saved sessions.")
 chats_app = typer.Typer(no_args_is_help=True, help="Browse private chats, groups, supergroups, and channels.")
 dialogs_app = typer.Typer(no_args_is_help=True, help="Backward-compatible mixed dialog commands.")
 messages_app = typer.Typer(no_args_is_help=True, help="Read, search, send, edit, forward, and delete messages.")
@@ -40,6 +57,7 @@ raw_app = typer.Typer(no_args_is_help=True, help="Invoke any bundled TL method d
 schema_app = typer.Typer(no_args_is_help=True, help="Inspect the bundled layer-135 schema.")
 
 app.add_typer(auth_app, name="auth")
+app.add_typer(explore_app, name="explore")
 app.add_typer(chats_app, name="chats")
 app.add_typer(dialogs_app, name="dialogs")
 app.add_typer(messages_app, name="messages")
@@ -50,14 +68,6 @@ app.add_typer(channels_app, name="channels")
 app.add_typer(links_app, name="links")
 app.add_typer(raw_app, name="raw")
 app.add_typer(schema_app, name="schema")
-console = Console()
-
-
-@dataclass(slots=True)
-class CLIState:
-    settings: EitaaSettings
-
-
 @app.callback()
 def root(
     ctx: typer.Context,
@@ -78,155 +88,6 @@ def root(
         settings.endpoint = endpoint
     ctx.obj = CLIState(settings)
 
-
-def _state(ctx: typer.Context) -> CLIState:
-    return ctx.find_root().obj
-
-
-def _run(coro: Any) -> Any:
-    try:
-        return asyncio.run(coro)
-    except (EitaaError, ValueError, KeyError, FileNotFoundError) as exc:
-        console.print(f"[red]Error:[/red] {exc}")
-        raise typer.Exit(1) from exc
-
-
-async def _with_client(settings: EitaaSettings, callback: Any, *, auth: bool = True) -> Any:
-    async with EitaaClient(settings, require_auth=auth) as client:
-        return await callback(client)
-
-
-@auth_app.command("send-code")
-def auth_send_code(ctx: typer.Context, phone_number: str, json_output: bool = typer.Option(False, "--json")) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.auth.send_code(phone_number)
-
-    response = _run(_with_client(_state(ctx).settings, action, auth=False))
-    if json_output:
-        print_json(response)
-    else:
-        typer.echo(f"phone_code_hash: {response.get('phone_code_hash', '')}")
-        typer.echo(f"sent_code_type: {response.get('type', {}).get('_', '')}")
-        if response.get("timeout") is not None:
-            typer.echo(f"timeout: {response['timeout']}")
-
-
-@auth_app.command("login")
-def auth_login(
-    ctx: typer.Context,
-    phone_number: str,
-    code: str | None = typer.Option(None, prompt=False, hide_input=False),
-    first_name: str | None = typer.Option(None, help="Used only when signup is required."),
-    last_name: str = typer.Option("", help="Used only when signup is required."),
-    save: bool = typer.Option(True, "--save/--no-save"),
-    json_output: bool = typer.Option(False, "--json"),
-) -> None:
-    async def action(client: EitaaClient) -> Any:
-        sent = await client.auth.send_code(phone_number)
-        entered_code = code or typer.prompt("Eitaa OTP code")
-        result = await client.auth.sign_in(
-            phone_number,
-            str(sent["phone_code_hash"]),
-            entered_code,
-            profile_name=_state(ctx).settings.profile or normalize_phone(phone_number),
-            save=save,
-        )
-        if result.get("_") == "auth.authorizationSignUpRequired":
-            name = first_name or typer.prompt("First name")
-            result = await client.auth.sign_up(
-                phone_number,
-                str(sent["phone_code_hash"]),
-                entered_code,
-                name,
-                last_name,
-                profile_name=_state(ctx).settings.profile or normalize_phone(phone_number),
-                save=save,
-            )
-        return result
-
-    response = _run(_with_client(_state(ctx).settings, action, auth=False))
-    if json_output:
-        print_json(response)
-    else:
-        user = response.get("user", {})
-        typer.echo(f"authenticated: {response.get('_') == 'auth.authorization'}")
-        typer.echo(f"user_id: {user.get('id', '')}")
-        typer.echo(f"profile: {_state(ctx).settings.profile or normalize_phone(phone_number)}")
-
-
-@auth_app.command("signup")
-def auth_signup(
-    ctx: typer.Context,
-    phone_number: str,
-    first_name: str,
-    last_name: str = "",
-    code: str | None = typer.Option(None),
-    json_output: bool = typer.Option(False, "--json"),
-) -> None:
-    async def action(client: EitaaClient) -> Any:
-        sent = await client.auth.send_code(phone_number)
-        entered_code = code or typer.prompt("Eitaa OTP code")
-        return await client.auth.sign_up(
-            phone_number,
-            str(sent["phone_code_hash"]),
-            entered_code,
-            first_name,
-            last_name,
-            profile_name=_state(ctx).settings.profile or normalize_phone(phone_number),
-        )
-
-    result = _run(_with_client(_state(ctx).settings, action, auth=False))
-    print_json(result) if json_output else typer.echo("Signup completed and session saved.")
-
-
-@auth_app.command("status")
-def auth_status(ctx: typer.Context, json_output: bool = typer.Option(False, "--json")) -> None:
-    settings = _state(ctx).settings
-    profile = SessionStore(settings.session_file).get(settings.profile)
-    data = {
-        "profile": profile.name,
-        "authenticated": profile.authenticated,
-        "phone_number": profile.phone_number,
-        "imei": profile.imei,
-        "user": profile.user,
-        "session_file": str(settings.session_file),
-    }
-    print_json(data) if json_output else console.print(data)
-
-
-@auth_app.command("profiles")
-def auth_profiles(ctx: typer.Context) -> None:
-    active, profiles = SessionStore(_state(ctx).settings.session_file).list_profiles()
-    table = Table(title="Eitaa session profiles")
-    table.add_column("Active")
-    table.add_column("Name")
-    table.add_column("Phone")
-    table.add_column("Authenticated")
-    for profile in profiles:
-        table.add_row("*" if profile.name == active else "", profile.name, profile.phone_number, str(profile.authenticated))
-    console.print(table)
-
-
-@auth_app.command("use")
-def auth_use(ctx: typer.Context, profile: str) -> None:
-    SessionStore(_state(ctx).settings.session_file).set_active(profile)
-    typer.echo(f"Active profile: {profile}")
-
-
-@auth_app.command("logout")
-def auth_logout(ctx: typer.Context, local_only: bool = typer.Option(False, "--local-only")) -> None:
-    settings = _state(ctx).settings
-    if local_only:
-        profile = SessionStore(settings.session_file).get(settings.profile)
-        SessionStore(settings.session_file).delete(profile.name)
-        typer.echo("Local session removed.")
-        return
-
-    async def action(client: EitaaClient) -> Any:
-        return await client.auth.logout()
-
-    _run(_with_client(settings, action))
-    typer.echo("Logged out and removed the local session.")
 
 
 def _parse_chat_kind(value: str) -> set[str]:
@@ -373,11 +234,39 @@ def messages_search(
     ctx: typer.Context,
     peer: str,
     query: str,
+    content_filter: ChatSearchFilter = typer.Option(
+        ChatSearchFilter.ALL,
+        "--filter",
+        help="all, photos, video, photo-video, document, url, gif, voice, music, chat-photos, calls, missed-calls, round-video, mentions, geo, contacts, or pinned.",
+    ),
+    from_peer: str | None = typer.Option(None, "--from", help="Only messages sent by this peer."),
+    top_message_id: int | None = typer.Option(None, "--top-message-id", min=1),
+    min_date: int = typer.Option(0, min=0, help="Minimum Unix timestamp."),
+    max_date: int = typer.Option(0, min=0, help="Maximum Unix timestamp."),
+    offset_id: int = typer.Option(0, min=0),
+    add_offset: int = typer.Option(0),
     limit: int = typer.Option(50, min=1, max=500),
+    max_id: int = typer.Option(0, min=0),
+    min_id: int = typer.Option(0, min=0),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    """Search within one chat, group, supergroup, or channel."""
+
     async def action(client: EitaaClient) -> Any:
-        return await client.messages.search(peer, query, limit=limit)
+        return await client.messages.search(
+            peer,
+            query,
+            content_filter=content_filter,
+            from_reference=from_peer,
+            top_message_id=top_message_id,
+            min_date=min_date,
+            max_date=max_date,
+            offset_id=offset_id,
+            add_offset=add_offset,
+            limit=limit,
+            max_id=max_id,
+            min_id=min_id,
+        )
 
     result = _run(_with_client(_state(ctx).settings, action))
     print_json(result) if json_output else print_messages(result)
@@ -532,25 +421,19 @@ def media_download(ctx: typer.Context, peer: str, message_id: int, output: Path 
 
 
 @contacts_app.command("search")
-def contacts_search(ctx: typer.Context, query: str, limit: int = 50, json_output: bool = typer.Option(False, "--json")) -> None:
+def contacts_search(
+    ctx: typer.Context,
+    query: str,
+    limit: int = typer.Option(50, min=1, max=100),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Search Eitaa users, groups, supergroups, and channels."""
+
     async def action(client: EitaaClient) -> Any:
-        return await client.invoke("contacts.search", {"q": query, "limit": limit})
+        return await client.search.entities(query, limit=limit)
 
     result = _run(_with_client(_state(ctx).settings, action))
-    if json_output:
-        print_json(result)
-        return
-    table = Table(title="Eitaa contact search")
-    table.add_column("Name")
-    table.add_column("Username")
-    table.add_column("Peer JSON", overflow="fold")
-    for entity in list(result.get("users", [])) + list(result.get("chats", [])):
-        try:
-            peer_json = json.dumps(entity_to_input_peer(entity), ensure_ascii=False)
-        except Exception:
-            peer_json = "unresolvable"
-        table.add_row(entity_title(entity), str(entity.get("username") or ""), peer_json)
-    console.print(table)
+    print_json(result) if json_output else print_entities(result, title="Eitaa contact search")
 
 
 @contacts_app.command("list")
@@ -771,19 +654,31 @@ def channels_leave(ctx: typer.Context, channel: str, yes: bool = typer.Option(Fa
 def channels_members(
     ctx: typer.Context,
     channel: str,
+    participant_filter: ParticipantFilter = typer.Option(
+        ParticipantFilter.RECENT,
+        "--filter",
+        help="recent, search, contacts, admins, bots, banned, kicked, or mentions.",
+    ),
+    query: str = typer.Option("", "--query", "-q"),
+    top_message_id: int | None = typer.Option(None, min=1),
     limit: int = typer.Option(100, min=1, max=200),
-    offset: int = 0,
+    offset: int = typer.Option(0, min=0),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    """List or search members of a supergroup/channel."""
+
     async def action(client: EitaaClient) -> Any:
-        value = await client.peers.resolve_input_channel(channel)
-        return await client.invoke(
-            "channels.getParticipants",
-            {"channel": value, "filter": {"_": "channelParticipantsRecent"}, "offset": offset, "limit": limit, "hash": 0},
+        return await client.search.participants(
+            channel,
+            participant_filter=participant_filter,
+            query=query,
+            top_message_id=top_message_id,
+            offset=offset,
+            limit=limit,
         )
 
     result = _run(_with_client(_state(ctx).settings, action))
-    print_json(result) if json_output else contacts_search_table(result.get("users", []))
+    print_json(result) if json_output else print_participants(result)
 
 
 @channels_app.command("invite")

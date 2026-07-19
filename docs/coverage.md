@@ -4,8 +4,9 @@
 
 | Area | Coverage |
 |---|---|
-| Authentication | Send OTP, login, signup-required flow, logout, saved profiles |
+| Authentication | Typed SMS/call/flash-call/app challenge handling, resend/fallback, login, signup-required flow, logout, saved profiles |
 | Conversation discovery | All dialogs, private chats, classic groups, supergroups, broadcast channels, local search, unread filter, full info |
+| Search and exploration | Private/public/global message discovery, content filters, entity lookup, exact username resolution, top peers, participant filters, cursors |
 | Messages | History, search, send, reply, edit, delete, forward, fetch by ID |
 | Media | Chunk upload, images, voice/audio, video, documents, albums, download |
 | Contacts | Search, list, import phone, add, delete |

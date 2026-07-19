@@ -3,6 +3,8 @@ from __future__ import annotations
 import secrets
 from typing import TYPE_CHECKING, Any
 
+from eitaa_cli.models.search import ChatSearchFilter
+
 if TYPE_CHECKING:
     from eitaa_cli.client import EitaaClient
 
@@ -42,25 +44,36 @@ class MessagesService:
         peer_reference: str | dict[str, Any],
         query: str,
         *,
+        content_filter: ChatSearchFilter = ChatSearchFilter.ALL,
+        from_reference: str | dict[str, Any] | None = None,
+        top_message_id: int | None = None,
+        min_date: int = 0,
+        max_date: int = 0,
         limit: int = 50,
         offset_id: int = 0,
+        add_offset: int = 0,
+        max_id: int = 0,
+        min_id: int = 0,
     ) -> dict[str, Any]:
-        peer = await self.client.peers.resolve(peer_reference)
-        return await self.client.invoke(
-            "messages.search",
-            {
-                "peer": peer,
-                "q": query,
-                "filter": {"_": "inputMessagesFilterEmpty"},
-                "min_date": 0,
-                "max_date": 0,
-                "offset_id": offset_id,
-                "add_offset": 0,
-                "limit": limit,
-                "max_id": 0,
-                "min_id": 0,
-                "hash": 0,
-            },
+        """Search messages in one conversation.
+
+        This method remains on ``client.messages`` for compatibility and delegates
+        to the typed search service.
+        """
+
+        return await self.client.search.in_chat_messages(
+            peer_reference,
+            query,
+            content_filter=content_filter,
+            from_reference=from_reference,
+            top_message_id=top_message_id,
+            min_date=min_date,
+            max_date=max_date,
+            offset_id=offset_id,
+            add_offset=add_offset,
+            limit=limit,
+            max_id=max_id,
+            min_id=min_id,
         )
 
     async def send_text(

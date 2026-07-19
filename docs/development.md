@@ -33,8 +33,9 @@ payload values. Do not copy the HAR into the repository.
 
 ```text
 src/eitaa_cli/
-  cli/          Typer commands and terminal presentation
-  services/     auth, dialogs, peers, messages, and media
+  cli/          Typer command modules and shared CLI runtime
+  models/       typed OTP, search, cursor, and filter domain models
+  services/     auth, search, dialogs, peers, messages, and media
   tl/           schema loader, codec, and TL export helpers
   transport/    async HTTPS endpoint failover
   data/         installed JSON and TL schema files
@@ -72,5 +73,7 @@ with guessed constructor IDs.
 - asynchronous I/O for HTTP and file operations;
 - no browser automation or browser session dependency;
 - explicit peer resolution and reusable access hashes;
+- typed domain models at service boundaries, raw TL dictionaries at the codec boundary;
+- small cohesive command modules for authentication and exploration;
 - confirmation for externally visible/destructive CLI actions;
 - no captured credentials or private traffic in the package.

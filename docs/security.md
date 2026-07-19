@@ -24,9 +24,11 @@ secret-management policy.
 5. Use deterministic typed peer references in unattended jobs.
 6. Apply conservative send rates and honor server rate limits.
 7. Restrict filesystem access to the account running the automation.
-8. Avoid placing OTPs or tokens in shell history, process arguments, logs, or CI
-   variables visible to untrusted users.
-9. Prefer `auth logout` over `--local-only` when retiring a session.
+8. Avoid placing OTPs, `phone_code_hash` values, or tokens in shell history,
+   process arguments, logs, or CI variables visible to untrusted users.
+9. Treat global/public search results as potentially sensitive output; do not
+   persist private message text unnecessarily.
+10. Prefer `auth logout` over `--local-only` when retiring a session.
 
 ## Threat boundaries
 

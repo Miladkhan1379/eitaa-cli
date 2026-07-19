@@ -13,3 +13,4 @@ build/
 *.har
 *.zip
 downloads/
+src/eitaa_cli/data

@@ -11,7 +11,7 @@ Optional media metadata support uses Pillow and Mutagen.
 ## Install from a wheel
 
 ```bash
-python -m pip install ./eitaa_cli-0.2.0-py3-none-any.whl
+python -m pip install ./eitaa_cli-0.3.0-py3-none-any.whl
 ```
 
 ## Install from source
@@ -55,11 +55,14 @@ eitaa auth login +989121234567
 The command:
 
 1. normalizes the phone number;
-2. calls `auth.sendCode`;
-3. prompts for the OTP;
-4. calls `auth.signIn`;
-5. completes `auth.signUp` when Eitaa reports that registration is required;
-6. stores the returned account token locally.
+2. requests an OTP with SMS as the default preference;
+3. reports the actual server-selected delivery and any fallback;
+4. prompts for the OTP;
+5. calls `auth.signIn`;
+6. completes `auth.signUp` when Eitaa reports that registration is required;
+7. stores the returned account token locally.
+
+Eitaa controls the actual OTP channel. See [Authentication and OTP delivery](authentication.md) for SMS, voice-call, flash-call, in-app, resend, and split-step workflows.
 
 For a new account, provide the name non-interactively:
 
@@ -107,6 +110,9 @@ eitaa chats list 50
 eitaa chats private 50
 eitaa groups list 100
 eitaa channels list 100
+
+# Search users, channels, groups, and messages
+eitaa explore all engineering
 ```
 
 Choose a peer reference from the final column, then read its history:

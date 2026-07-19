@@ -11,13 +11,16 @@ cookies.
 
 ## Highlights
 
-- OTP login and signup-required authorization
+- Typed OTP challenge handling for SMS, voice call, flash call, and in-app codes
+- SMS-first preference, server-selected delivery reporting, resend/fallback flow
 - Secure multi-profile session storage
-- Dedicated views for private chats, classic groups, supergroups, and channels
-- Message history, search, send, reply, edit, delete, and forward
-- Image, voice, audio, video, document, album, upload, and download workflows
+- Dedicated private chat, group, supergroup, and channel views
+- Private/public/global message discovery with Eitaa-specific search filters
+- Entity, username, frequent-peer, and participant exploration
+- Rich chat-local search with sender, date, topic, media, and pagination filters
+- Message history, send, reply, edit, delete, and forward
+- Images, voice/audio, video, documents, albums, upload, and download workflows
 - Contact and membership management
-- Public username and invite-link operations
 - Generic access to all 419 bundled API methods
 - Async Python API built on `httpx`
 - Layer-135 machine-readable JSON and human-readable TL schema exports
@@ -27,18 +30,16 @@ cookies.
 From the wheel:
 
 ```bash
-python -m pip install ./eitaa_cli-0.2.0-py3-none-any.whl
+python -m pip install ./eitaa_cli-0.3.0-py3-none-any.whl
 ```
 
 For development:
 
 ```bash
-git clone <your-copy-of-this-project>
-cd eitaa-cli
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -e '.[dev,media]'
+python -m pip install -e '.[dev,media,docs]'
 ```
 
 Verify the installation:
@@ -48,21 +49,58 @@ eitaa --version
 eitaa --help
 ```
 
-## First login
+## Authentication and OTP methods
+
+The shortest flow requests SMS as the default preference:
 
 ```bash
 eitaa auth login +989121234567
 ```
 
-The CLI requests an OTP, prompts for the code, and stores the returned bearer
-session token in:
+Eitaa controls the actual OTP channel. Inspect all supported forms:
+
+```bash
+eitaa auth methods
+```
+
+Request a challenge separately:
+
+```bash
+eitaa auth send-code +989121234567 --delivery sms --json
+```
+
+When the response advertises voice call as the fallback, wait for the returned
+timeout and request the next method:
+
+```bash
+eitaa auth resend-code +989121234567 'PHONE_CODE_HASH' --preferred call
+```
+
+Then sign in with the new hash without sending another code:
+
+```bash
+eitaa auth login +989121234567 --phone-code-hash 'NEW_PHONE_CODE_HASH'
+```
+
+Flash-call capability can be advertised explicitly:
+
+```bash
+eitaa auth send-code +989121234567 \
+  --allow-flash-call \
+  --current-number
+```
+
+Read [Authentication and OTP delivery](docs/authentication.md) before integrating
+OTP flows into automation.
+
+The saved bearer token is stored by default at:
 
 ```text
 ~/.config/eitaa-cli/sessions.json
 ```
 
 The file is created with owner-only permissions (`0600`). Treat it like a
-password because possession of the token may permit account access.
+password.
 
 ## Browse chats, groups, and channels
 
@@ -79,17 +117,11 @@ eitaa groups list 100
 # Broadcast channels only
 eitaa channels list 100
 
-# Search the fetched dialog list locally
-eitaa chats list 200 --query engineering
-
-# Only unread conversations
-eitaa chats list 200 --unread-only
-
-# Structured output for scripts
-eitaa chats list 100 --json
+# Filter the fetched dialog list locally
+eitaa chats list 300 --query engineering --unread-only
 ```
 
-The table includes a reusable peer reference such as:
+Tables include reusable peer references:
 
 ```text
 me
@@ -98,20 +130,58 @@ user:12345:987654321
 channel:12345:987654321
 ```
 
-Use that reference in message, media, info, and link commands:
+## Search and exploration
+
+Search peer identities:
 
 ```bash
-eitaa messages history channel:12345:987654321 --limit 30
-eitaa chats info channel:12345:987654321
-eitaa messages send chat:12345 'Hello from the CLI' --yes
+eitaa explore entities engineering
+eitaa explore username @engineering
 ```
 
-## Common workflows
+Search messages across Eitaa indexes:
 
 ```bash
-# Read and search
+# Combined discovery
+eitaa explore search 'release notes'
+
+# Public indexed content only
+eitaa explore search python --scope public --filter text
+
+# Private/account-visible messages only
+eitaa explore search invoice --scope private --filter file
+```
+
+Run entity and message discovery together:
+
+```bash
+eitaa explore all engineering
+```
+
+Search one known conversation with typed filters:
+
+```bash
+eitaa messages search @engineering release --filter document
+eitaa messages search @engineering '' --filter pinned
+eitaa messages search @engineering status --from @alice --min-date 1782864000
+```
+
+Explore frequent peers and members:
+
+```bash
+eitaa explore top --category correspondents --category groups --category channels
+eitaa explore members @engineering --filter admins
+eitaa explore members @engineering --filter search --query ali
+```
+
+See [Search and exploration](docs/search-and-exploration.md) for scope flags,
+filters, pagination cursors, result semantics, and permissions.
+
+## Messaging and media
+
+```bash
+# Read history
 eitaa messages history @username --limit 50
-eitaa messages search @username 'release notes' --limit 100
 
 # Send text and replies
 eitaa messages send @username 'Hello' --yes
@@ -122,15 +192,50 @@ eitaa media send @username ./photo.jpg --caption 'Photo' --yes
 eitaa media send @username ./voice.ogg --voice --duration 12 --yes
 eitaa media send @username ./report.pdf --as-document --yes
 
-# Download the media attached to a message
+# Download media attached to a message
 eitaa media download @username 812 ./downloads
+```
 
-# Manage profiles
+## Multiple accounts
+
+```bash
 eitaa --profile personal auth login +989121234567
 eitaa --profile work auth login +989351234567
+
 eitaa auth profiles
 eitaa auth use personal
+
+eitaa --profile work chats list 50
 ```
+
+## Python API
+
+```python
+from eitaa_cli import EitaaClient
+from eitaa_cli.models import GlobalSearchFilter, GlobalSearchScope
+
+async with EitaaClient(require_auth=True) as client:
+    result = await client.search.global_messages(
+        "python",
+        scope=GlobalSearchScope.PUBLIC,
+        content_filter=GlobalSearchFilter.TEXT,
+        limit=50,
+    )
+```
+
+The high-level services are available as:
+
+```text
+client.auth
+client.dialogs
+client.search
+client.messages
+client.media
+client.peers
+```
+
+See [Python API](docs/python-api.md) for typed OTP, search, peer, messaging, and
+media examples.
 
 ## Schema files
 
@@ -149,14 +254,16 @@ Inspect or export the installed schema:
 ```bash
 eitaa schema stats
 eitaa schema methods messages.
-eitaa schema method messages.getDialogs
-eitaa schema constructors inputPeer
+eitaa schema method messages.searchGlobalExt
+eitaa schema constructors auth.sentCodeType
 eitaa schema export ./schema-export
 ```
 
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
+- [Authentication and OTP delivery](docs/authentication.md)
+- [Search and exploration](docs/search-and-exploration.md)
 - [Complete CLI reference](docs/usage.md)
 - [Chats, groups, supergroups, and channels](docs/conversations.md)
 - [Python API](docs/python-api.md)
@@ -167,21 +274,28 @@ eitaa schema export ./schema-export
 - [Troubleshooting](docs/troubleshooting.md)
 - [Development and testing](docs/development.md)
 
-A MkDocs configuration is included. To preview the documentation site:
+Preview the documentation site:
 
 ```bash
-python -m pip install -e '.[docs]'
 mkdocs serve
 ```
+
+## Validation
+
+- 25 ordinary tests pass; the private-HAR regression test is opt-in.
+- Ruff and mypy pass across the source tree.
+- The codec remains compatible with all 1,086 supplied captured API exchanges.
+- Captured tokens, OTPs, phone numbers, messages, contacts, browser assets, and
+  HAR files are excluded from distributable artifacts.
 
 ## Important limitations
 
 - This is an unofficial reverse-engineered client. Eitaa may change endpoints,
   schemas, anti-abuse rules, or method behavior without notice.
+- The server—not the CLI—chooses the actual OTP delivery channel.
 - Password/SRP-protected login is not yet exposed as a high-level command.
 - Real-time update streaming is not yet wrapped as a persistent event loop.
-- The implementation was validated offline against all 1,086 supplied captured
-  exchanges. Live service behavior still depends on the current Eitaa deployment.
+- Public search indexing and participant visibility are server-controlled.
 - Use only accounts, chats, groups, and channels you are authorized to access.
 
 ## License

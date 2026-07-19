@@ -39,8 +39,17 @@ Common causes:
 - the phone number was supplied in a different normalized form;
 - Eitaa requires password/SRP verification for the account.
 
-Retry the complete `auth login` flow. Password/SRP is not yet wrapped as a
-high-level command.
+Inspect the challenge first:
+
+```bash
+eitaa auth send-code +989121234567 --json
+```
+
+Use the actual `delivery`, `next_delivery`, and `timeout_seconds` fields. If a
+call is advertised as the fallback, wait for the timeout and run
+`auth resend-code`, then pass its new hash to `auth login --phone-code-hash`.
+See [Authentication and OTP delivery](authentication.md). Password/SRP is not
+yet wrapped as a high-level command.
 
 ## No chats appear
 
@@ -133,3 +142,25 @@ Include:
 
 Never include OTPs, session tokens, private message bodies, phone numbers, or raw
 HAR files in public issue reports.
+
+
+## Search returns no results
+
+Confirm that you selected the intended search surface:
+
+```bash
+# Only filter fetched dialogs locally
+eitaa chats list 500 --query engineering
+
+# Search known conversation history
+eitaa messages search @engineering release
+
+# Search public/private indexed messages
+eitaa explore search release --scope global
+
+# Search peer identities
+eitaa explore entities engineering
+```
+
+Public discovery and participant lists are server-controlled. Some channels are
+not indexed, and some member lists require administrator rights.

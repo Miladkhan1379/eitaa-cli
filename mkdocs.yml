@@ -10,6 +10,8 @@ theme:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Authentication and OTP: authentication.md
+  - Search and exploration: search-and-exploration.md
   - Conversations: conversations.md
   - CLI reference: usage.md
   - Python API: python-api.md

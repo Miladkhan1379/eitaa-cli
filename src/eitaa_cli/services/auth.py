@@ -3,6 +3,7 @@ from __future__ import annotations
 import platform
 from typing import TYPE_CHECKING, Any
 
+from eitaa_cli.models.auth import OtpChallenge, OtpCodeSettings
 from eitaa_cli.session import SessionProfile
 
 if TYPE_CHECKING:
@@ -10,10 +11,24 @@ if TYPE_CHECKING:
 
 
 class AuthService:
+    """OTP authentication and session lifecycle operations."""
+
     def __init__(self, client: EitaaClient) -> None:
         self.client = client
 
-    async def send_code(self, phone_number: str) -> dict[str, Any]:
+    async def request_code(
+        self,
+        phone_number: str,
+        *,
+        settings: OtpCodeSettings | None = None,
+    ) -> OtpChallenge:
+        """Request an OTP and return the server-selected delivery details.
+
+        Eitaa decides the actual channel. With the capture-compatible default
+        settings, the supplied web client received SMS first and advertised a
+        voice call as the later resend method.
+        """
+
         phone = normalize_phone(phone_number)
         response = await self.client.invoke(
             "auth.sendCode",
@@ -21,11 +36,39 @@ class AuthService:
                 "phone_number": phone,
                 "api_id": self.client.settings.api_id,
                 "api_hash": self.client.settings.api_hash,
-                "settings": {"_": "codeSettings"},
+                "settings": (settings or OtpCodeSettings()).to_tl(),
             },
             token="",
         )
-        return response
+        return OtpChallenge.from_response(phone, response)
+
+    async def send_code(
+        self,
+        phone_number: str,
+        *,
+        settings: OtpCodeSettings | None = None,
+    ) -> dict[str, Any]:
+        """Backward-compatible raw wrapper around :meth:`request_code`."""
+
+        return (await self.request_code(phone_number, settings=settings)).raw
+
+    async def resend_code(
+        self,
+        phone_number: str,
+        phone_code_hash: str,
+    ) -> OtpChallenge:
+        """Ask Eitaa to use the next server-advertised OTP delivery method."""
+
+        phone = normalize_phone(phone_number)
+        response = await self.client.invoke(
+            "auth.resendCode",
+            {
+                "phone_number": phone,
+                "phone_code_hash": phone_code_hash,
+            },
+            token="",
+        )
+        return OtpChallenge.from_response(phone, response)
 
     async def sign_in(
         self,

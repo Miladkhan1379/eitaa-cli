@@ -35,10 +35,12 @@ class EitaaClient:
         from eitaa_cli.services.media import MediaService
         from eitaa_cli.services.messages import MessagesService
         from eitaa_cli.services.peers import PeerResolver
+        from eitaa_cli.services.search import SearchService
 
         self.auth = AuthService(self)
         self.peers = PeerResolver(self)
         self.dialogs = DialogsService(self)
+        self.search = SearchService(self)
         self.messages = MessagesService(self)
         self.media = MediaService(self)
 
