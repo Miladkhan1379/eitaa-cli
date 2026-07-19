@@ -102,8 +102,18 @@ clock accuracy.
 
 ## Flood/rate-limit errors
 
-Stop sending and respect the server-provided delay. Do not aggressively retry.
-Use conservative batching and idempotency safeguards in automation.
+The CLI extracts exact delays from RPC identifiers such as `FLOOD_WAIT_120`,
+explicit server prose, and HTTP `Retry-After` headers. It displays both a human
+duration and the exact seconds:
+
+```text
+Next step: Try again in 2 minutes (120 seconds).
+```
+
+Stop sending until the complete delay has passed. Do not aggressively retry;
+repeated OTP requests can extend the cooldown. If Eitaa provides no exact
+duration, the CLI says that explicitly rather than guessing. See
+[Error handling and retry behavior](error-handling.md).
 
 ## Media upload fails
 

@@ -55,9 +55,7 @@ def test_send_code_uses_capture_compatible_zero_code_settings_flags() -> None:
 
 def test_error_envelope_is_detected_even_when_method_returns_vector() -> None:
     codec = TLCodec()
-    error_payload = codec.encode_constructor(
-        "error", {"code": 400, "text": "INVALID_CONSTRUCTOR"}
-    )
+    error_payload = codec.encode_constructor("error", {"code": 400, "text": "INVALID_CONSTRUCTOR"})
     with pytest.raises(EitaaRPCError, match="INVALID_CONSTRUCTOR") as captured:
         codec.decode_response("langpack.getStrings", error_payload)
     assert captured.value.code == 400

@@ -143,7 +143,9 @@ def filter_dialog_result(
     filtered = dict(result)
     filtered["dialogs"] = selected_dialogs
     filtered["users"] = [
-        user for user in result.get("users", []) if ("user", int(user.get("id", 0))) in selected_keys
+        user
+        for user in result.get("users", [])
+        if ("user", int(user.get("id", 0))) in selected_keys
     ]
     filtered["chats"] = [
         chat

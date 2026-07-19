@@ -25,9 +25,7 @@ class FakePeers:
             return {"_": "inputPeerUser", "user_id": 7, "access_hash": 8}
         raise AssertionError(reference)
 
-    async def resolve_input_channel(
-        self, reference: str | dict[str, Any]
-    ) -> dict[str, Any]:
+    async def resolve_input_channel(self, reference: str | dict[str, Any]) -> dict[str, Any]:
         peer = await self.resolve(reference)
         return {
             "_": "inputChannel",
@@ -149,9 +147,7 @@ def test_next_search_cursor_uses_the_last_message_and_entity_access_hash() -> No
                     "peer_id": {"_": "peerChannel", "channel_id": 42},
                 }
             ],
-            "chats": [
-                {"_": "channel", "id": 42, "access_hash": 99, "title": "Example"}
-            ],
+            "chats": [{"_": "channel", "id": 42, "access_hash": 99, "title": "Example"}],
             "users": [],
         }
     )

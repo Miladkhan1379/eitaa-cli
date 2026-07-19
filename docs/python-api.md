@@ -258,19 +258,38 @@ result = await client.invoke("help.getConfig", {}, token="")
 ## Error handling
 
 ```python
-from eitaa_cli.errors import EitaaError, EitaaRPCError
+from eitaa_cli.errors import (
+    EitaaError,
+    EitaaRPCError,
+    OtpError,
+    OtpFailureReason,
+)
+
+try:
+    challenge = await client.auth.request_code("+989121234567")
+except OtpError as exc:
+    if exc.reason is OtpFailureReason.RATE_LIMITED:
+        print("retry_after_seconds:", exc.retry_after_seconds)
+    print(exc.to_dict())
 
 try:
     await client.messages.send_text("@missing", "Hello")
 except EitaaRPCError as exc:
     print(exc.code, exc.text, exc.method)
+    print(exc.retryable, exc.retry_after_seconds)
 except EitaaError as exc:
-    print(exc)
+    print(exc.to_dict())
 ```
 
-Flood limits, permission failures, invalid peers, expired OTP challenges, and
-expired sessions are reported as exceptions. Automation should classify
-retryable transport failures separately from deterministic RPC errors.
+OTP operations translate raw RPC errors into stable reasons such as
+`rate-limited`, `invalid-code`, `expired-code`, and `invalid-challenge`. Exact
+server-provided waits are available through `retry_after_seconds`; no delay is
+invented when Eitaa omits one.
+
+Flood limits, permission failures, invalid peers, expired sessions, and
+transport failures remain typed exceptions. For non-idempotent operations, do
+not automatically retry until you know whether the first request succeeded. See
+[Error handling and retry behavior](error-handling.md).
 
 ## Session storage
 

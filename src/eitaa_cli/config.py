@@ -42,9 +42,7 @@ class EitaaSettings:
 
     api_id: int = field(default_factory=lambda: _env_int("EITAA_API_ID", 2496))
     api_hash: str = field(
-        default_factory=lambda: os.getenv(
-            "EITAA_API_HASH", "8da85b0d5bfe62527e5b244c209159c3"
-        )
+        default_factory=lambda: os.getenv("EITAA_API_HASH", "8da85b0d5bfe62527e5b244c209159c3")
     )
     layer: int = field(default_factory=lambda: _env_int("EITAA_LAYER", 135))
     flags: int = 32

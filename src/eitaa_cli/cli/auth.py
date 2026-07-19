@@ -5,6 +5,7 @@ from typing import Any
 import typer
 from rich.table import Table
 
+from eitaa_cli.cli.error_reporting import humanize_duration
 from eitaa_cli.cli.runtime import console, run, state, with_client
 from eitaa_cli.client import EitaaClient
 from eitaa_cli.formatting import print_json
@@ -37,17 +38,37 @@ def _print_challenge(
     *,
     preferred: OtpDeliveryPreference,
 ) -> None:
+    console.print("[bold green]OTP request accepted by Eitaa.[/bold green]")
     typer.echo(f"phone_code_hash: {challenge.phone_code_hash}")
     typer.echo(f"delivery: {challenge.delivery.value}")
-    typer.echo(
-        f"next_delivery: {challenge.next_delivery.value if challenge.next_delivery else ''}"
-    )
+    typer.echo(f"next_delivery: {challenge.next_delivery.value if challenge.next_delivery else ''}")
     if challenge.code_length is not None:
         typer.echo(f"code_length: {challenge.code_length}")
     if challenge.flash_call_pattern:
         typer.echo(f"flash_call_pattern: {challenge.flash_call_pattern}")
     if challenge.timeout_seconds is not None:
         typer.echo(f"resend_timeout_seconds: {challenge.timeout_seconds}")
+        wait = humanize_duration(challenge.timeout_seconds)
+        next_method = (
+            f" The next advertised method is {challenge.next_delivery.value}."
+            if challenge.next_delivery
+            else ""
+        )
+        console.print(
+            "[cyan]If the OTP does not arrive, do not request another code immediately. "
+            f"Wait {wait} ({challenge.timeout_seconds} seconds), then use "
+            "`eitaa auth resend-code PHONE_NUMBER PHONE_CODE_HASH`."
+            f"{next_method}[/cyan]"
+        )
+    else:
+        console.print(
+            "[cyan]Eitaa did not provide a resend timer. If the OTP does not arrive, "
+            "avoid rapid retries and request the fallback later.[/cyan]"
+        )
+    console.print(
+        "[dim]The CLI can confirm that Eitaa accepted the request, but it cannot confirm "
+        "that an SMS or call reached your device.[/dim]"
+    )
     if challenge.delivery.value != preferred.value:
         console.print(
             "[yellow]Eitaa selected "
@@ -64,8 +85,14 @@ def auth_methods() -> None:
     table.add_column("Method")
     table.add_column("How it works", overflow="fold")
     table.add_column("Can the CLI force it?", overflow="fold")
-    table.add_row("sms", "A numeric code is delivered by SMS.", "No; requested as the default preference.")
-    table.add_row("call", "A voice call reads the numeric code.", "No; commonly advertised as the resend fallback.")
+    table.add_row(
+        "sms", "A numeric code is delivered by SMS.", "No; requested as the default preference."
+    )
+    table.add_row(
+        "call",
+        "A voice call reads the numeric code.",
+        "No; commonly advertised as the resend fallback.",
+    )
     table.add_row(
         "flash-call",
         "The incoming caller ID matches a server-provided pattern.",

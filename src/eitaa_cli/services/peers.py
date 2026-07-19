@@ -34,9 +34,7 @@ class PeerResolver:
             raise PeerResolutionError("empty peer reference")
         if text.startswith("@") or _username_from_reference(text):
             try:
-                resolved = await self.client.invoke(
-                    "contacts.resolveUsername", {"username": query}
-                )
+                resolved = await self.client.invoke("contacts.resolveUsername", {"username": query})
                 return _resolved_peer_to_input_peer(resolved)
             except EitaaRPCError:
                 pass
@@ -75,7 +73,13 @@ class PeerResolver:
 
 def normalize_input_peer(value: dict[str, Any]) -> dict[str, Any]:
     predicate = value.get("_")
-    if predicate in {"inputPeerEmpty", "inputPeerSelf", "inputPeerUser", "inputPeerChat", "inputPeerChannel"}:
+    if predicate in {
+        "inputPeerEmpty",
+        "inputPeerSelf",
+        "inputPeerUser",
+        "inputPeerChat",
+        "inputPeerChannel",
+    }:
         return value
     return entity_to_input_peer(value)
 
@@ -153,7 +157,9 @@ def _entity_matches(entity: dict[str, Any], query: str) -> bool:
         str(entity.get("username") or ""),
         str(entity.get("title") or ""),
         " ".join(
-            value for value in [str(entity.get("first_name") or ""), str(entity.get("last_name") or "")] if value
+            value
+            for value in [str(entity.get("first_name") or ""), str(entity.get("last_name") or "")]
+            if value
         ),
         str(entity.get("phone") or ""),
     ]

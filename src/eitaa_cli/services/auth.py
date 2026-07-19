@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import platform
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from eitaa_cli.errors import (
+    EitaaRPCError,
+    OtpOperation,
+    classify_otp_rpc_error,
+)
 from eitaa_cli.models.auth import OtpChallenge, OtpCodeSettings
 from eitaa_cli.session import SessionProfile
 
@@ -30,7 +36,7 @@ class AuthService:
         """
 
         phone = normalize_phone(phone_number)
-        response = await self.client.invoke(
+        response = await self._invoke_otp(
             "auth.sendCode",
             {
                 "phone_number": phone,
@@ -38,7 +44,7 @@ class AuthService:
                 "api_hash": self.client.settings.api_hash,
                 "settings": (settings or OtpCodeSettings()).to_tl(),
             },
-            token="",
+            operation=OtpOperation.REQUEST,
         )
         return OtpChallenge.from_response(phone, response)
 
@@ -60,13 +66,13 @@ class AuthService:
         """Ask Eitaa to use the next server-advertised OTP delivery method."""
 
         phone = normalize_phone(phone_number)
-        response = await self.client.invoke(
+        response = await self._invoke_otp(
             "auth.resendCode",
             {
                 "phone_number": phone,
                 "phone_code_hash": phone_code_hash,
             },
-            token="",
+            operation=OtpOperation.RESEND,
         )
         return OtpChallenge.from_response(phone, response)
 
@@ -80,14 +86,14 @@ class AuthService:
         save: bool = True,
     ) -> dict[str, Any]:
         phone = normalize_phone(phone_number)
-        response = await self.client.invoke(
+        response = await self._invoke_otp(
             "auth.signIn",
             {
                 "phone_number": phone,
                 "phone_code_hash": phone_code_hash,
                 "phone_code": phone_code,
             },
-            token="",
+            operation=OtpOperation.SIGN_IN,
         )
         if response.get("_") == "auth.authorization":
             self._accept_authorization(response, phone, profile_name=profile_name, save=save)
@@ -106,7 +112,7 @@ class AuthService:
     ) -> dict[str, Any]:
         phone = normalize_phone(phone_number)
         settings = self.client.settings
-        response = await self.client.invoke(
+        response = await self._invoke_otp(
             "auth.signUp",
             {
                 "phone_number": phone,
@@ -124,10 +130,29 @@ class AuthService:
                     "sign": "",
                 },
             },
-            token="",
+            operation=OtpOperation.SIGN_UP,
         )
         if response.get("_") == "auth.authorization":
             self._accept_authorization(response, phone, profile_name=profile_name, save=save)
+        return response
+
+    async def _invoke_otp(
+        self,
+        method: str,
+        params: Mapping[str, Any],
+        *,
+        operation: OtpOperation,
+    ) -> dict[str, Any]:
+        """Invoke one auth method and translate its raw RPC errors."""
+
+        try:
+            response = await self.client.invoke(method, params, token="")
+        except EitaaRPCError as exc:
+            raise classify_otp_rpc_error(exc, operation=operation) from exc
+        if not isinstance(response, dict):
+            raise ValueError(
+                f"{method} returned {type(response).__name__}, expected an object response"
+            )
         return response
 
     async def logout(self, *, clear_local: bool = True) -> Any:

@@ -18,9 +18,7 @@ class MediaService:
     def __init__(self, client: EitaaClient) -> None:
         self.client = client
 
-    async def upload(
-        self, path: Path, *, peer: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def upload(self, path: Path, *, peer: dict[str, Any] | None = None) -> dict[str, Any]:
         path = path.expanduser().resolve()
         if not path.is_file():
             raise FileNotFoundError(path)

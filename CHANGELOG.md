@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Added a structured error model with stable OTP failure reasons and machine-readable `to_dict()` output.
+- Added exact retry-delay parsing for `FLOOD_WAIT_*`, explicit wait prose, and HTTP `Retry-After` headers.
+- Added actionable CLI reports for OTP rate limits, invalid/expired codes, invalid hashes, invalid/banned numbers, password requirements, delivery failures, and auth restarts.
+- Improved generic handling for transport failures, permission errors, server errors, peer resolution, missing files, invalid input, and unauthenticated profiles.
+- Successful OTP challenges now explain that request acceptance is not delivery confirmation and print the exact resend cooldown in human and raw seconds.
+- Added dedicated error-handling documentation and retry-policy guidance for automation.
+- Expanded the test suite to cover retry parsing, OTP classification, report generation, HTTP retry headers, and service-level translation.
+
 ## 0.3.0
 
 - Added a typed `SearchService` with Eitaa-specific private, public, and global

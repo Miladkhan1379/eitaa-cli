@@ -65,6 +65,7 @@ _TOP_PEER_FLAGS: dict[TopPeerCategory, str] = {
     TopPeerCategory.CHANNELS: "channels",
 }
 
+
 class SearchService:
     """High-level search and discovery workflows for Eitaa."""
 

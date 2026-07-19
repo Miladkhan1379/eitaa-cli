@@ -9,7 +9,7 @@ build/
 *.egg-info/
 .env
 .eitaa/
-*/.eitaa-session.json
+.eitaa-session.json
 *.har
 *.zip
 downloads/

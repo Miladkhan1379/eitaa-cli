@@ -11,7 +11,7 @@ Optional media metadata support uses Pillow and Mutagen.
 ## Install from a wheel
 
 ```bash
-python -m pip install ./eitaa_cli-0.3.0-py3-none-any.whl
+python -m pip install ./eitaa_cli-0.4.0-py3-none-any.whl
 ```
 
 ## Install from source

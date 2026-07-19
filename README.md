@@ -12,6 +12,8 @@ cookies.
 ## Highlights
 
 - Typed OTP challenge handling for SMS, voice call, flash call, and in-app codes
+- Exact retry-after guidance for OTP throttling and HTTP rate limits
+- Actionable error reports for invalid/expired codes, permissions, peers, files, and transport failures
 - SMS-first preference, server-selected delivery reporting, resend/fallback flow
 - Secure multi-profile session storage
 - Dedicated private chat, group, supergroup, and channel views
@@ -30,7 +32,7 @@ cookies.
 From the wheel:
 
 ```bash
-python -m pip install ./eitaa_cli-0.3.0-py3-none-any.whl
+python -m pip install ./eitaa_cli-0.4.0-py3-none-any.whl
 ```
 
 For development:
@@ -69,8 +71,9 @@ Request a challenge separately:
 eitaa auth send-code +989121234567 --delivery sms --json
 ```
 
-When the response advertises voice call as the fallback, wait for the returned
-timeout and request the next method:
+The CLI prints the exact server-provided resend cooldown. If the code does not
+arrive, wait for that duration before requesting the next method. When the
+response advertises voice call as the fallback:
 
 ```bash
 eitaa auth resend-code +989121234567 'PHONE_CODE_HASH' --preferred call

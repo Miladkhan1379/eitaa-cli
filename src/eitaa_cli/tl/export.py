@@ -29,10 +29,14 @@ def render_tl_section(schema: dict[str, Any], section_name: str) -> str:
         "---types---",
     ]
     for item in section.get("constructors", []):
-        lines.append(_render_definition(item, item.get("predicate") or item.get("method") or "unknown"))
+        lines.append(
+            _render_definition(item, item.get("predicate") or item.get("method") or "unknown")
+        )
     lines.extend(["", "---functions---"])
     for item in section.get("methods", []):
-        lines.append(_render_definition(item, item.get("method") or item.get("predicate") or "unknown"))
+        lines.append(
+            _render_definition(item, item.get("method") or item.get("predicate") or "unknown")
+        )
     lines.append("")
     return "\n".join(lines)
 
@@ -62,9 +66,7 @@ def _render_definition(item: dict[str, Any], name: str) -> str:
     for value in [result_type, *(str(param.get("type", "")) for param in params)]:
         generic_names.update(_GENERIC_RE.findall(value))
     generic_prefix = " ".join(f"{{{generic}:Type}}" for generic in sorted(generic_names))
-    rendered_params = " ".join(
-        f"{param['name']}:{param['type']}" for param in params
-    )
+    rendered_params = " ".join(f"{param['name']}:{param['type']}" for param in params)
     body = " ".join(value for value in [generic_prefix, rendered_params] if value)
     spacer = f" {body}" if body else ""
     return f"{name}#{identifier:08x}{spacer} = {result_type};"

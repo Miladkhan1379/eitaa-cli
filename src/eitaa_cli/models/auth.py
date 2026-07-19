@@ -86,9 +86,7 @@ class OtpChallenge:
             )
         sent_type = response.get("type") or {}
         next_type = response.get("next_type") or {}
-        delivery = _SENT_CODE_TYPES.get(
-            str(sent_type.get("_", "")), OtpDeliveryMethod.UNKNOWN
-        )
+        delivery = _SENT_CODE_TYPES.get(str(sent_type.get("_", "")), OtpDeliveryMethod.UNKNOWN)
         next_delivery = _CODE_TYPES.get(str(next_type.get("_", "")))
         length_value = sent_type.get("length")
         timeout_value = response.get("timeout")
@@ -104,14 +102,11 @@ class OtpChallenge:
             raw=response,
         )
 
-    def supports_preference(
-        self, preferred: OtpDeliveryMethod | OtpDeliveryPreference
-    ) -> bool:
+    def supports_preference(self, preferred: OtpDeliveryMethod | OtpDeliveryPreference) -> bool:
         """Return whether the current or advertised next delivery matches a preference."""
 
-        return (
-            self.delivery.value == preferred.value
-            or (self.next_delivery is not None and self.next_delivery.value == preferred.value)
+        return self.delivery.value == preferred.value or (
+            self.next_delivery is not None and self.next_delivery.value == preferred.value
         )
 
     def to_dict(self) -> dict[str, Any]:

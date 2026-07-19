@@ -209,3 +209,31 @@ fallback = await client.auth.resend_code(
 - **Resend is rejected:** wait for `timeout_seconds` and avoid repeated retries.
 - **Password/SRP is required:** password-protected login is still a deliberate
   high-level gap; the schema methods remain available for future implementation.
+
+## Delivery confirmation and resend timing
+
+A returned `auth.sentCode` challenge confirms that Eitaa accepted the OTP
+request. It does **not** confirm that the SMS or call reached the phone. The CLI
+therefore prints the exact `timeout_seconds` value in both human-readable and
+raw seconds form.
+
+When the code does not arrive, wait for the printed duration before running
+`auth resend-code`. For example, a timeout of `125` is displayed as
+`2 minutes 5 seconds (125 seconds)`.
+
+Do not repeatedly run `auth send-code` during this period. Repeated requests can
+trigger a flood limit or extend an existing cooldown.
+
+## Structured OTP errors
+
+Raw Eitaa errors are translated into typed `OtpError` values. The CLI provides
+specific guidance for rate limits, invalid or banned phone numbers, invalid or
+expired codes, invalid challenge hashes, password requirements, authentication
+restarts, and delivery failures.
+
+When Eitaa returns an exact wait identifier such as `FLOOD_WAIT_90`, the CLI
+prints `Try again in 1 minute 30 seconds (90 seconds)`. When no exact duration is
+provided, the CLI says so instead of inventing a retry time.
+
+See [Error handling and retry behavior](error-handling.md) for the complete
+mapping and Python API examples.

@@ -35,7 +35,9 @@ def reusable_peer_reference(entity: dict[str, Any]) -> str:
         if entity.get("self"):
             return "me"
         access_hash = entity.get("access_hash")
-        return f"user:{identifier}:{access_hash}" if access_hash is not None else f"user:{identifier}"
+        return (
+            f"user:{identifier}:{access_hash}" if access_hash is not None else f"user:{identifier}"
+        )
     if predicate in {"chat", "chatEmpty", "chatForbidden"}:
         return f"chat:{identifier}"
     if predicate in {"channel", "channelForbidden"}:
@@ -85,7 +87,11 @@ def print_messages(result: dict[str, Any]) -> None:
     table.add_column("Text / media", overflow="fold")
     for message in result.get("messages", []):
         date_value = int(message.get("date", 0))
-        date = datetime.fromtimestamp(date_value).isoformat(sep=" ", timespec="seconds") if date_value else ""
+        date = (
+            datetime.fromtimestamp(date_value).isoformat(sep=" ", timespec="seconds")
+            if date_value
+            else ""
+        )
         text = str(message.get("message") or "")
         media = message.get("media", {}).get("_")
         if media:

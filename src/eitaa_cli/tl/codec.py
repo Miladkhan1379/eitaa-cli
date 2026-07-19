@@ -127,10 +127,10 @@ class TLCodec:
         return bytes(out)
 
     @staticmethod
-    def _calculate_flags(
-        params: Sequence[TLParam], values: Mapping[str, Any]
-    ) -> dict[str, int]:
-        flags: dict[str, int] = {p.name: int(values.get(p.name, 0)) for p in params if p.type == "#"}
+    def _calculate_flags(params: Sequence[TLParam], values: Mapping[str, Any]) -> dict[str, int]:
+        flags: dict[str, int] = {
+            p.name: int(values.get(p.name, 0)) for p in params if p.type == "#"
+        }
         for param in params:
             optional = _optional(param.type)
             if not optional:
@@ -175,9 +175,7 @@ class TLCodec:
             return self._encode_object(value, field)
         return self._encode_object(value, field, expected_type=type_name)
 
-    def _encode_object(
-        self, value: Any, field: str, expected_type: str | None = None
-    ) -> bytes:
+    def _encode_object(self, value: Any, field: str, expected_type: str | None = None) -> bytes:
         if isinstance(value, str):
             predicate = value
             values: Mapping[str, Any] = {}

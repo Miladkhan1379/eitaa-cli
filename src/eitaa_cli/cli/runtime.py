@@ -7,6 +7,7 @@ from typing import Any
 import typer
 from rich.console import Console
 
+from eitaa_cli.cli.error_reporting import render_error
 from eitaa_cli.client import EitaaClient
 from eitaa_cli.config import EitaaSettings
 from eitaa_cli.errors import EitaaError
@@ -30,7 +31,7 @@ def run(coro: Any) -> Any:
     try:
         return asyncio.run(coro)
     except (EitaaError, ValueError, KeyError, FileNotFoundError) as exc:
-        console.print(f"[red]Error:[/red] {exc}")
+        render_error(console, exc)
         raise typer.Exit(1) from exc
 
 

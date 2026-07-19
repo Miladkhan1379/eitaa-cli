@@ -11,6 +11,7 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Authentication and OTP: authentication.md
+  - Error handling and retries: error-handling.md
   - Search and exploration: search-and-exploration.md
   - Conversations: conversations.md
   - CLI reference: usage.md

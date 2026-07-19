@@ -11,10 +11,30 @@ def sample_dialogs() -> dict[str, Any]:
     return {
         "_": "messages.dialogs",
         "dialogs": [
-            {"_": "dialog", "peer": {"_": "peerUser", "user_id": 1}, "top_message": 11, "unread_count": 2},
-            {"_": "dialog", "peer": {"_": "peerChat", "chat_id": 2}, "top_message": 12, "unread_count": 0},
-            {"_": "dialog", "peer": {"_": "peerChannel", "channel_id": 3}, "top_message": 13, "unread_count": 4},
-            {"_": "dialog", "peer": {"_": "peerChannel", "channel_id": 4}, "top_message": 14, "unread_count": 0},
+            {
+                "_": "dialog",
+                "peer": {"_": "peerUser", "user_id": 1},
+                "top_message": 11,
+                "unread_count": 2,
+            },
+            {
+                "_": "dialog",
+                "peer": {"_": "peerChat", "chat_id": 2},
+                "top_message": 12,
+                "unread_count": 0,
+            },
+            {
+                "_": "dialog",
+                "peer": {"_": "peerChannel", "channel_id": 3},
+                "top_message": 13,
+                "unread_count": 4,
+            },
+            {
+                "_": "dialog",
+                "peer": {"_": "peerChannel", "channel_id": 4},
+                "top_message": 14,
+                "unread_count": 0,
+            },
         ],
         "messages": [
             {"_": "message", "id": 11, "message": "private"},
@@ -25,7 +45,13 @@ def sample_dialogs() -> dict[str, Any]:
         "users": [{"_": "user", "id": 1, "first_name": "Ali", "access_hash": 101}],
         "chats": [
             {"_": "chat", "id": 2, "title": "Project Room"},
-            {"_": "channel", "id": 3, "title": "Engineering", "megagroup": True, "access_hash": 103},
+            {
+                "_": "channel",
+                "id": 3,
+                "title": "Engineering",
+                "megagroup": True,
+                "access_hash": 103,
+            },
             {"_": "channel", "id": 4, "title": "News", "broadcast": True, "access_hash": 104},
         ],
     }

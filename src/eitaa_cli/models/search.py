@@ -73,9 +73,7 @@ class SearchCursor:
     """Cursor used by Eitaa global message discovery."""
 
     offset_date: int = 0
-    offset_peer: dict[str, Any] = field(
-        default_factory=lambda: {"_": "inputPeerEmpty"}
-    )
+    offset_peer: dict[str, Any] = field(default_factory=lambda: {"_": "inputPeerEmpty"})
     offset_id: int = 0
 
     def __post_init__(self) -> None:
