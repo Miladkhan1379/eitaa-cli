@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+
+CLIENT_ENDPOINTS = (
+    "https://hasan.eitaa.ir/eitaa/",
+    "https://hosna.eitaa.com/eitaa/",
+    "https://armita.eitaa.com/eitaa/",
+    "https://majid.eitaa.com/eitaa/",
+    "https://alireza.eitaa.com/eitaa/",
+    "https://mostafa.eitaa.com/eitaa/",
+    "https://sajad.eitaa.ir/eitaa/",
+    "https://bagher.eitaa.ir/eitaa/",
+    "https://sadegh.eitaa.ir/eitaa/",
+    "https://kazem.eitaa.ir/eitaa/",
+)
+DOWNLOAD_ENDPOINTS = (
+    "https://mohsen.eitaa.com/eitaa/",
+    "https://ghasem.eitaa.com/eitaa/",
+    "https://hadi.eitaa.com/eitaa/",
+    "https://hossein.eitaa.com/eitaa/",
+    "https://vahid.eitaa.com/eitaa/",
+)
+UPLOAD_ENDPOINTS = (
+    "https://alzheimer.eitaa.com/eitaa/",
+    "https://fateme.eitaa.com/eitaa/",
+    "https://ali.eitaa.com/eitaa/",
+    "https://meysam.eitaa.com/eitaa/",
+)
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    return int(raw) if raw else default
+
+
+@dataclass(slots=True)
+class EitaaSettings:
+    """Runtime settings matching Eitaa Web build 4.6.12, API layer 135."""
+
+    api_id: int = field(default_factory=lambda: _env_int("EITAA_API_ID", 2496))
+    api_hash: str = field(
+        default_factory=lambda: os.getenv(
+            "EITAA_API_HASH", "8da85b0d5bfe62527e5b244c209159c3"
+        )
+    )
+    layer: int = field(default_factory=lambda: _env_int("EITAA_LAYER", 135))
+    flags: int = 32
+    app_version: str = "4.6.12 K"
+    build_version: int = 2496
+    language_code: str = "fa"
+    timeout: float = field(default_factory=lambda: float(os.getenv("EITAA_TIMEOUT", "45")))
+    profile: str | None = field(default_factory=lambda: os.getenv("EITAA_PROFILE") or None)
+    session_file: Path = field(
+        default_factory=lambda: Path(
+            os.getenv("EITAA_SESSION_FILE", "~/.config/eitaa-cli/sessions.json")
+        ).expanduser()
+    )
+    endpoint: str | None = field(default_factory=lambda: os.getenv("EITAA_ENDPOINT") or None)
+
+    def endpoints(self, kind: str) -> tuple[str, ...]:
+        if self.endpoint:
+            return (self.endpoint,)
+        if kind == "download":
+            return DOWNLOAD_ENDPOINTS
+        if kind == "upload":
+            return UPLOAD_ENDPOINTS
+        return CLIENT_ENDPOINTS

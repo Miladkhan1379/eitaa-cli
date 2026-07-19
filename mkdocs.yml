@@ -1,0 +1,29 @@
+site_name: Eitaa CLI
+site_description: Direct Python CLI and async client for Eitaa Web's TL-over-HTTPS API
+repo_name: eitaa-cli
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Conversations: conversations.md
+  - CLI reference: usage.md
+  - Python API: python-api.md
+  - Protocol:
+      - Schema files: schema.md
+      - Wire protocol: protocol.md
+      - Coverage: coverage.md
+  - Operations:
+      - Security: security.md
+      - Troubleshooting: troubleshooting.md
+      - Development: development.md
+markdown_extensions:
+  - admonition
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
