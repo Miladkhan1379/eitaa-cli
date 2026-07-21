@@ -229,7 +229,9 @@ from eitaa_cli.models import (
     TopPeerCategory,
 )
 
-async with EitaaClient(require_auth=True) as client:
+client = await EitaaClient.create(require_auth=True)
+
+async with client:
     public_messages = await client.search.global_messages(
         "python",
         scope=GlobalSearchScope.PUBLIC,

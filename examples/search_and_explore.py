@@ -12,7 +12,8 @@ from eitaa_cli.services.search import next_search_cursor
 
 
 async def main() -> None:
-    async with EitaaClient(require_auth=True) as client:
+    client = await EitaaClient.create(require_auth=True)
+    async with client:
         entities = await client.search.entities("engineering", limit=20)
         print("entities:", len(entities.get("users", [])) + len(entities.get("chats", [])))
 

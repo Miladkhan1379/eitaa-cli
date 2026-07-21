@@ -1,36 +1,59 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime
-from typing import Any
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import cast
 
 from rich.console import Console
 from rich.json import JSON
 from rich.table import Table
 
+from eitaa_cli.api_types import (
+    ContactsSearchResponse,
+    DialogsResponse,
+    EntityObject,
+    JSONValue,
+    MessagesResponse,
+    ParticipantsResponse,
+    PeerKey,
+    TLObject,
+    TLValue,
+    TopPeersResponse,
+    float_field,
+    int_field,
+    object_field,
+    object_list,
+    str_field,
+)
 from eitaa_cli.services.dialogs import dialog_entity_map, entity_kind
 from eitaa_cli.services.peers import peer_key
 
 console = Console()
+_UNKNOWN_ENTITY: EntityObject = {"_": "unknown"}
 
 
-def jsonable(value: Any) -> Any:
+def jsonable(value: object) -> JSONValue:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
     if isinstance(value, bytes):
         return {"$bytes_base64": base64.b64encode(value).decode("ascii"), "length": len(value)}
-    if isinstance(value, dict):
-        return {key: jsonable(item) for key, item in value.items()}
+    if isinstance(value, Mapping):
+        return {str(key): jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [jsonable(item) for item in value]
-    return value
+    return str(value)
 
 
-def print_json(value: Any) -> None:
+def print_json(value: object) -> None:
     console.print(JSON.from_data(jsonable(value)))
 
 
-def reusable_peer_reference(entity: dict[str, Any]) -> str:
+def reusable_peer_reference(entity: EntityObject | None) -> str:
+    if entity is None:
+        return ""
     predicate = entity.get("_")
-    identifier = int(entity.get("id", 0))
+    identifier = entity.get("id", 0)
     if predicate in {"user", "userEmpty"}:
         if entity.get("self"):
             return "me"
@@ -50,9 +73,12 @@ def reusable_peer_reference(entity: dict[str, Any]) -> str:
     return ""
 
 
-def print_dialogs(result: dict[str, Any], *, title: str = "Eitaa chats") -> None:
+def print_dialogs(result: DialogsResponse, *, title: str = "Eitaa chats") -> None:
     entities = dialog_entity_map(result)
-    messages = {int(item.get("id", 0)): item for item in result.get("messages", [])}
+    messages = {
+        int_field(message, "id"): message
+        for message in object_list(cast(TLObject, result), "messages")
+    }
 
     table = Table(title=title)
     table.add_column("Type", no_wrap=True)
@@ -62,15 +88,17 @@ def print_dialogs(result: dict[str, Any], *, title: str = "Eitaa chats") -> None
     table.add_column("Last message", overflow="fold")
     table.add_column("Peer reference", overflow="fold")
     for dialog in result.get("dialogs", []):
-        key = peer_key(dialog.get("peer", {}))
-        entity = entities.get(key, {})
+        dialog_object = cast(TLObject, dialog)
+        key = peer_key(object_field(dialog_object, "peer"))
+        entity = entities.get(key)
         title_value = entity_title(entity) or f"{key[0]}:{key[1]}"
-        message = messages.get(int(dialog.get("top_message", 0)), {})
-        snippet = str(message.get("message") or message.get("action", {}).get("_") or "")
+        message = messages.get(dialog.get("top_message", 0), {})
+        action = object_field(message, "action")
+        snippet = str_field(message, "message") or str_field(action, "_")
         table.add_row(
-            entity_kind(entity),
+            entity_kind(entity or _UNKNOWN_ENTITY),
             title_value,
-            str(entity.get("username") or ""),
+            entity.get("username", "") if entity else "",
             str(dialog.get("unread_count", 0)),
             snippet[:120],
             reusable_peer_reference(entity),
@@ -79,76 +107,67 @@ def print_dialogs(result: dict[str, Any], *, title: str = "Eitaa chats") -> None
     console.print(f"[dim]{len(result.get('dialogs', []))} conversation(s)[/dim]")
 
 
-def print_messages(result: dict[str, Any]) -> None:
+def print_messages(result: MessagesResponse) -> None:
     table = Table(title="Eitaa messages")
     table.add_column("ID", justify="right")
     table.add_column("Date")
     table.add_column("Direction")
     table.add_column("Text / media", overflow="fold")
     for message in result.get("messages", []):
-        date_value = int(message.get("date", 0))
-        date = (
-            datetime.fromtimestamp(date_value).isoformat(sep=" ", timespec="seconds")
-            if date_value
-            else ""
-        )
-        text = str(message.get("message") or "")
-        media = message.get("media", {}).get("_")
-        if media:
-            text = f"{text} [{media}]".strip()
-        if message.get("_") == "messageService":
-            text = f"[{message.get('action', {}).get('_', 'service')}]"
+        message_object = cast(TLObject, message)
+        date = _format_timestamp(message.get("date", 0))
+        text = _message_summary(message_object)
         table.add_row(
             str(message.get("id", "")),
             date,
-            "out" if message.get("out") else "in",
+            "out" if bool(message_object.get("out")) else "in",
             text[:500],
         )
     console.print(table)
 
 
-def entity_title(entity: dict[str, Any]) -> str:
-    if entity.get("title"):
-        return str(entity["title"])
+def entity_title(entity: EntityObject | None) -> str:
+    if entity is None:
+        return ""
+    title = entity.get("title")
+    if title:
+        return title
     full = " ".join(
-        part
-        for part in [str(entity.get("first_name") or ""), str(entity.get("last_name") or "")]
-        if part
+        part for part in [entity.get("first_name", ""), entity.get("last_name", "")] if part
     ).strip()
-    return full or str(entity.get("username") or entity.get("phone") or "")
+    return full or entity.get("username", "") or entity.get("phone", "")
 
 
-def print_entities(result: dict[str, Any], *, title: str = "Eitaa entity search") -> None:
-    """Render users, groups, supergroups, and channels returned by contacts.search."""
-
+def print_entities(
+    result: ContactsSearchResponse,
+    *,
+    title: str = "Eitaa entity search",
+) -> None:
     table = Table(title=title)
     table.add_column("Type", no_wrap=True)
     table.add_column("Name", overflow="fold")
     table.add_column("Username")
     table.add_column("Phone")
     table.add_column("Peer reference", overflow="fold")
-    for entity in list(result.get("users", [])) + list(result.get("chats", [])):
+    entities = [*result.get("users", []), *result.get("chats", [])]
+    for entity in entities:
         table.add_row(
             entity_kind(entity),
             entity_title(entity),
-            str(entity.get("username") or ""),
-            str(entity.get("phone") or ""),
+            entity.get("username", ""),
+            entity.get("phone", ""),
             reusable_peer_reference(entity),
         )
     console.print(table)
-    console.print(
-        f"[dim]{len(result.get('users', [])) + len(result.get('chats', []))} entity(s)[/dim]"
-    )
+    console.print(f"[dim]{len(entities)} entity(s)[/dim]")
 
 
 def print_search_messages(
-    result: dict[str, Any],
+    result: MessagesResponse,
     *,
     title: str = "Eitaa message search",
 ) -> None:
-    """Render cross-conversation search results with source peer information."""
-
-    entities = _message_entity_map(result)
+    entities = _message_entity_map(cast(Mapping[str, TLValue], result))
     table = Table(title=title)
     table.add_column("ID", justify="right")
     table.add_column("Date")
@@ -157,89 +176,94 @@ def print_search_messages(
     table.add_column("Text / media", overflow="fold")
     table.add_column("Peer reference", overflow="fold")
     for message in result.get("messages", []):
-        peer = message.get("peer_id") or {}
-        key = peer_key(peer)
-        entity = entities.get(key, {})
-        date_value = int(message.get("date", 0))
-        date = (
-            datetime.fromtimestamp(date_value).isoformat(sep=" ", timespec="seconds")
-            if date_value
-            else ""
-        )
-        text = str(message.get("message") or "")
-        media = message.get("media", {}).get("_")
-        if media:
-            text = f"{text} [{media}]".strip()
-        if message.get("_") == "messageService":
-            text = f"[{message.get('action', {}).get('_', 'service')}]"
+        message_object = cast(TLObject, message)
+        key = peer_key(object_field(message_object, "peer_id"))
+        entity = entities.get(key)
         table.add_row(
             str(message.get("id", "")),
-            date,
+            _format_timestamp(message.get("date", 0)),
             entity_title(entity) or f"{key[0]}:{key[1]}",
-            entity_kind(entity),
-            text[:500],
+            entity_kind(entity or _UNKNOWN_ENTITY),
+            _message_summary(message_object)[:500],
             reusable_peer_reference(entity),
         )
     console.print(table)
     console.print(f"[dim]{len(result.get('messages', []))} message(s)[/dim]")
 
 
-def print_top_peers(result: dict[str, Any]) -> None:
-    """Render the categories returned by contacts.getTopPeers."""
-
-    if result.get("_") in {"contacts.topPeersNotModified", "contacts.topPeersDisabled"}:
-        console.print(result.get("_"))
+def print_top_peers(result: TopPeersResponse) -> None:
+    predicate = result.get("_")
+    if predicate in {"contacts.topPeersNotModified", "contacts.topPeersDisabled"}:
+        console.print(predicate)
         return
-    entities = _message_entity_map(result)
+    entities = _message_entity_map(cast(Mapping[str, TLValue], result))
     table = Table(title="Eitaa top peers")
     table.add_column("Category")
     table.add_column("Rank", justify="right")
     table.add_column("Name", overflow="fold")
     table.add_column("Rating", justify="right")
     table.add_column("Peer reference", overflow="fold")
-    for category in result.get("categories", []):
-        category_name = str(category.get("category", {}).get("_") or "")
-        for rank, top_peer in enumerate(category.get("peers", []), start=1):
-            peer = top_peer.get("peer") or {}
-            entity = entities.get(peer_key(peer), {})
+    for category in object_list(cast(TLObject, result), "categories"):
+        category_name = str_field(object_field(category, "category"), "_")
+        for rank, top_peer in enumerate(object_list(category, "peers"), start=1):
+            entity = entities.get(peer_key(object_field(top_peer, "peer")))
             table.add_row(
                 category_name,
                 str(rank),
                 entity_title(entity),
-                f"{float(top_peer.get('rating', 0.0)):.3f}",
+                f"{float_field(top_peer, 'rating'):.3f}",
                 reusable_peer_reference(entity),
             )
     console.print(table)
 
 
-def print_participants(result: dict[str, Any]) -> None:
-    """Render channel/supergroup participants with their role constructor."""
-
-    users = {int(user.get("id", 0)): user for user in result.get("users", [])}
+def print_participants(result: ParticipantsResponse) -> None:
+    users = {user.get("id", 0): user for user in result.get("users", [])}
     table = Table(title="Eitaa participants")
     table.add_column("Role", no_wrap=True)
     table.add_column("Name", overflow="fold")
     table.add_column("Username")
     table.add_column("Peer reference", overflow="fold")
-    for participant in result.get("participants", []):
-        peer = participant.get("peer") or {}
-        user_id = int(participant.get("user_id", peer.get("user_id", 0)))
-        user = users.get(user_id, {})
+    participants = object_list(cast(TLObject, result), "participants")
+    for participant in participants:
+        peer = object_field(participant, "peer")
+        user_id = int_field(participant, "user_id") or int_field(peer, "user_id")
+        user = users.get(user_id)
         table.add_row(
-            str(participant.get("_") or ""),
+            str_field(participant, "_"),
             entity_title(user) or str(user_id),
-            str(user.get("username") or ""),
+            user.get("username", "") if user else "",
             reusable_peer_reference(user),
         )
     console.print(table)
-    console.print(f"[dim]{len(result.get('participants', []))} participant(s)[/dim]")
+    console.print(f"[dim]{len(participants)} participant(s)[/dim]")
 
 
-def _message_entity_map(result: dict[str, Any]) -> dict[tuple[str, int], dict[str, Any]]:
-    entities: dict[tuple[str, int], dict[str, Any]] = {}
-    for user in result.get("users", []):
-        entities[("user", int(user.get("id", 0)))] = user
-    for chat in result.get("chats", []):
-        kind = "channel" if chat.get("_") in {"channel", "channelForbidden"} else "chat"
-        entities[(kind, int(chat.get("id", 0)))] = chat
+def _message_entity_map(result: Mapping[str, TLValue]) -> dict[PeerKey, EntityObject]:
+    entities: dict[PeerKey, EntityObject] = {}
+    for user in object_list(result, "users"):
+        entity = cast(EntityObject, user)
+        entities[("user", entity.get("id", 0))] = entity
+    for chat in object_list(result, "chats"):
+        entity = cast(EntityObject, chat)
+        kind = "channel" if entity.get("_") in {"channel", "channelForbidden"} else "chat"
+        entities[(kind, entity.get("id", 0))] = entity
     return entities
+
+
+def _message_summary(message: TLObject) -> str:
+    text = str_field(message, "message")
+    media_type = str_field(object_field(message, "media"), "_")
+    if media_type:
+        text = f"{text} [{media_type}]".strip()
+    if str_field(message, "_") == "messageService":
+        return f"[{str_field(object_field(message, 'action'), '_', 'service')}]"
+    return text
+
+
+def _format_timestamp(value: int) -> str:
+    return (
+        datetime.fromtimestamp(value, tz=UTC).isoformat(sep=" ", timespec="seconds")
+        if value
+        else ""
+    )

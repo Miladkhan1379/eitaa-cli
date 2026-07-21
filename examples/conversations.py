@@ -19,7 +19,8 @@ async def show(label: str, result: dict) -> None:  # type: ignore[type-arg]
 
 
 async def main() -> None:
-    async with EitaaClient(require_auth=True) as client:
+    client = await EitaaClient.create(require_auth=True)
+    async with client:
         await show("private", await client.dialogs.private(50))
         await show("groups", await client.dialogs.groups(100))
         await show("channels", await client.dialogs.channels(100))

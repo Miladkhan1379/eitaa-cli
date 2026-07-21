@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import TypeVar
 
 import typer
 from rich.console import Console
@@ -13,6 +14,7 @@ from eitaa_cli.config import EitaaSettings
 from eitaa_cli.errors import EitaaError
 
 console = Console()
+ResultT = TypeVar("ResultT")
 
 
 @dataclass(slots=True)
@@ -27,14 +29,20 @@ def state(ctx: typer.Context) -> CLIState:
     return value
 
 
-def run(coro: Any) -> Any:
+def run(coroutine: Coroutine[object, object, ResultT]) -> ResultT:
     try:
-        return asyncio.run(coro)
-    except (EitaaError, ValueError, KeyError, FileNotFoundError) as exc:
+        return asyncio.run(coroutine)
+    except (EitaaError, ValueError, TypeError, KeyError, FileNotFoundError) as exc:
         render_error(console, exc)
         raise typer.Exit(1) from exc
 
 
-async def with_client(settings: EitaaSettings, callback: Any, *, auth: bool = True) -> Any:
-    async with EitaaClient(settings, require_auth=auth) as client:
+async def with_client(
+    settings: EitaaSettings,
+    callback: Callable[[EitaaClient], Awaitable[ResultT]],
+    *,
+    auth: bool = True,
+) -> ResultT:
+    client = await EitaaClient.create(settings, require_auth=auth)
+    async with client:
         return await callback(client)

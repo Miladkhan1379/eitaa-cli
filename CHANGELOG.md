@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+- Refactored the package around an async-first client lifecycle and async session-store methods.
+- Added strict mypy configuration and eliminated `Any` from production code.
+- Added typed TL, entity, dialog, message, auth, session, schema, HTTP-header, and app-metadata `TypedDict` definitions.
+- Added a minimal async RPC protocol and one validated object-response boundary for services.
+- Added explicit TL numeric validation instead of permissive runtime coercion.
+- Added the PEP 561 `py.typed` marker for downstream type checkers.
+- Enabled HTTP/2 dependencies explicitly and centralized stable web request metadata in `WebClientProfile`.
+- Removed default CLI, Python-runtime, package-version, and HTTP-library markers from outbound headers and signup metadata.
+- Moved interactive prompts and session filesystem operations off the event loop.
+- Added architecture/typing and HTTP-profile documentation plus regression tests for request metadata.
+
 ## 0.4.0
 
 - Added a structured error model with stable OTP failure reasons and machine-readable `to_dict()` output.

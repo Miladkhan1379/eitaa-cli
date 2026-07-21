@@ -1,5 +1,5 @@
 site_name: Eitaa CLI
-site_description: Direct Python CLI and async client for Eitaa Web's TL-over-HTTPS API
+site_description: Async, typed command-line client for Eitaa's TL-over-HTTPS API
 repo_name: eitaa-cli
 theme:
   name: material
@@ -16,9 +16,11 @@ nav:
   - Conversations: conversations.md
   - CLI reference: usage.md
   - Python API: python-api.md
+  - Architecture and typing: architecture-and-typing.md
   - Protocol:
       - Schema files: schema.md
       - Wire protocol: protocol.md
+      - HTTP profile: http-profile.md
       - Coverage: coverage.md
   - Operations:
       - Security: security.md

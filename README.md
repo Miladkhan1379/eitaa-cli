@@ -1,9 +1,8 @@
 # eitaa-cli
 
-An unofficial, direct Python CLI and asynchronous client for Eitaa's web API.
-It sends the same TL-encoded HTTPS requests used by the supplied Eitaa browser
-client; it does not drive a browser, require Selenium, or depend on browser
-cookies.
+An unofficial, async-first command-line client and Python library for Eitaa's
+web API. It sends TL-encoded HTTPS requests directly; it does not drive a
+browser, require Selenium, or depend on browser cookies.
 
 > **Protocol note:** Eitaa Web does not use Google Protocol Buffers in the supplied
 > assets. The wire schema is Telegram-style **TL (Type Language)**. The extracted
@@ -24,7 +23,9 @@ cookies.
 - Images, voice/audio, video, documents, albums, upload, and download workflows
 - Contact and membership management
 - Generic access to all 419 bundled API methods
-- Async Python API built on `httpx`
+- Async Python API with HTTP/2 connection reuse
+- Strict mypy typing, public `TypedDict` shapes, and a bundled `py.typed` marker
+- Stable web compatibility metadata with no CLI/runtime/library branding
 - Layer-135 machine-readable JSON and human-readable TL schema exports
 
 ## Install
@@ -32,7 +33,7 @@ cookies.
 From the wheel:
 
 ```bash
-python -m pip install ./eitaa_cli-0.4.0-py3-none-any.whl
+python -m pip install ./eitaa_cli-0.5.0-py3-none-any.whl
 ```
 
 For development:
@@ -50,6 +51,17 @@ Verify the installation:
 eitaa --version
 eitaa --help
 ```
+
+## HTTP compatibility metadata
+
+The default request profile is based on the supplied web-client capture. It
+does not send an `eitaa-cli`, Python, package-version, or HTTP-library marker in
+request headers or signup metadata. HTTP/2 is enabled by default.
+
+The profile is stable and configurable; it does not rotate identities or try to
+emulate browser TLS/JavaScript fingerprints. Header compatibility therefore
+does not guarantee that a server will classify the transport as a browser. See
+[HTTP compatibility profile](docs/http-profile.md).
 
 ## Authentication and OTP methods
 
@@ -217,7 +229,9 @@ eitaa --profile work chats list 50
 from eitaa_cli import EitaaClient
 from eitaa_cli.models import GlobalSearchFilter, GlobalSearchScope
 
-async with EitaaClient(require_auth=True) as client:
+client = await EitaaClient.create(require_auth=True)
+
+async with client:
     result = await client.search.global_messages(
         "python",
         scope=GlobalSearchScope.PUBLIC,
@@ -270,6 +284,8 @@ eitaa schema export ./schema-export
 - [Complete CLI reference](docs/usage.md)
 - [Chats, groups, supergroups, and channels](docs/conversations.md)
 - [Python API](docs/python-api.md)
+- [Architecture, typing, and async behavior](docs/architecture-and-typing.md)
+- [HTTP compatibility profile](docs/http-profile.md)
 - [Schema and protocol files](docs/schema.md)
 - [Wire protocol](docs/protocol.md)
 - [Coverage](docs/coverage.md)
@@ -285,8 +301,8 @@ mkdocs serve
 
 ## Validation
 
-- 25 ordinary tests pass; the private-HAR regression test is opt-in.
-- Ruff and mypy pass across the source tree.
+- 38 ordinary tests pass; the private-HAR regression test is opt-in.
+- Ruff formatting/linting and strict mypy pass across the source tree.
 - The codec remains compatible with all 1,086 supplied captured API exchanges.
 - Captured tokens, OTPs, phone numbers, messages, contacts, browser assets, and
   HAR files are excluded from distributable artifacts.

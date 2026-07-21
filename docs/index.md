@@ -1,8 +1,8 @@
 # Eitaa CLI documentation
 
-`eitaa-cli` is a direct Python client and command-line interface for the binary
-API used by the supplied Eitaa Web application. It communicates through the
-captured TL-over-HTTPS protocol without browser automation.
+`eitaa-cli` is an async-first command-line interface and typed Python client for
+the binary API used by the supplied Eitaa Web application. It communicates
+through TL-over-HTTPS without browser automation.
 
 ## Start here
 
@@ -12,6 +12,8 @@ captured TL-over-HTTPS protocol without browser automation.
 4. [Browse chats, groups, supergroups, and channels](conversations.md)
 5. [Use the complete command reference](usage.md)
 6. [Automate with the async Python API](python-api.md)
+7. [Review architecture and typing](architecture-and-typing.md)
+8. [Review the HTTP compatibility profile](http-profile.md)
 
 ## Major capabilities
 
@@ -23,6 +25,8 @@ captured TL-over-HTTPS protocol without browser automation.
 - Entity, username, top-peer, and participant exploration
 - Text, media, reply, edit, delete, forward, upload, and download workflows
 - Direct invocation of all 419 bundled layer-135 API methods
+- Strict typing with `TypedDict`, dataclasses, enums, protocols, and `py.typed`
+- HTTP/2 with stable web metadata and no default CLI/runtime branding
 
 ## Protocol documentation
 

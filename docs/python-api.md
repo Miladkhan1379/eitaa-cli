@@ -9,7 +9,8 @@ from eitaa_cli import EitaaClient
 
 
 async def main() -> None:
-    async with EitaaClient(require_auth=True) as client:
+    client = await EitaaClient.create(require_auth=True)
+    async with client:
         result = await client.dialogs.list(50)
         print(len(result.get("dialogs", [])))
 
@@ -26,7 +27,9 @@ The async context manager closes the shared HTTP client.
 from eitaa_cli import EitaaClient
 from eitaa_cli.models import OtpCodeSettings, OtpDeliveryMethod
 
-async with EitaaClient(require_auth=False) as client:
+client = await EitaaClient.create(require_auth=False)
+
+async with client:
     challenge = await client.auth.request_code(
         "+989121234567",
         settings=OtpCodeSettings(),
@@ -87,21 +90,25 @@ from eitaa_cli.config import EitaaSettings
 
 settings = EitaaSettings(profile="work")
 
-async with EitaaClient(settings, require_auth=True) as client:
+client = await EitaaClient.create(settings, require_auth=True)
+
+async with client:
     ...
 ```
 
 Or pass `profile` directly:
 
 ```python
-async with EitaaClient(profile="work", require_auth=True) as client:
+client = await EitaaClient.create(profile="work", require_auth=True)
+async with client:
     ...
 ```
 
 ## List conversations
 
 ```python
-async with EitaaClient(require_auth=True) as client:
+client = await EitaaClient.create(require_auth=True)
+async with client:
     all_chats = await client.dialogs.list(100)
     private = await client.dialogs.private(100)
     groups = await client.dialogs.groups(100, query="project")
@@ -119,7 +126,9 @@ from eitaa_cli.models import (
     TopPeerCategory,
 )
 
-async with EitaaClient(require_auth=True) as client:
+client = await EitaaClient.create(require_auth=True)
+
+async with client:
     public_messages = await client.search.global_messages(
         "python",
         scope=GlobalSearchScope.PUBLIC,

@@ -3,6 +3,8 @@ from __future__ import annotations
 import stat
 from pathlib import Path
 
+import pytest
+
 from eitaa_cli.session import SessionProfile, SessionStore, generate_imei
 
 
@@ -30,3 +32,20 @@ def test_generated_imei_matches_web_client_shape() -> None:
     assert len(imei) == 21
     assert imei.endswith("__web")
     assert imei[:-5].isalnum()
+
+
+@pytest.mark.asyncio
+async def test_async_session_store_round_trip(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "sessions.json")
+    profile = SessionProfile(name="async", phone_number="98912", token="token", imei="imei")
+
+    await store.asave(profile)
+    loaded = await store.aget("async", create=False)
+    active, profiles = await store.alist_profiles()
+
+    assert loaded == profile
+    assert active == "async"
+    assert profiles == [profile]
+
+    await store.adelete("async")
+    assert (await store.aload_document())["profiles"] == {}

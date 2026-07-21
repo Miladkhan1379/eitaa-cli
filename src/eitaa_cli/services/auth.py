@@ -1,25 +1,19 @@
 from __future__ import annotations
 
-import platform
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import cast
 
-from eitaa_cli.errors import (
-    EitaaRPCError,
-    OtpOperation,
-    classify_otp_rpc_error,
-)
+from eitaa_cli.api_types import EntityObject, TLObject, TLValue, object_field, str_field
+from eitaa_cli.errors import EitaaRPCError, OtpOperation, classify_otp_rpc_error
 from eitaa_cli.models.auth import OtpChallenge, OtpCodeSettings
+from eitaa_cli.rpc import AuthClient, invoke_object
 from eitaa_cli.session import SessionProfile
-
-if TYPE_CHECKING:
-    from eitaa_cli.client import EitaaClient
 
 
 class AuthService:
     """OTP authentication and session lifecycle operations."""
 
-    def __init__(self, client: EitaaClient) -> None:
+    def __init__(self, client: AuthClient) -> None:
         self.client = client
 
     async def request_code(
@@ -28,13 +22,6 @@ class AuthService:
         *,
         settings: OtpCodeSettings | None = None,
     ) -> OtpChallenge:
-        """Request an OTP and return the server-selected delivery details.
-
-        Eitaa decides the actual channel. With the capture-compatible default
-        settings, the supplied web client received SMS first and advertised a
-        voice call as the later resend method.
-        """
-
         phone = normalize_phone(phone_number)
         response = await self._invoke_otp(
             "auth.sendCode",
@@ -53,25 +40,16 @@ class AuthService:
         phone_number: str,
         *,
         settings: OtpCodeSettings | None = None,
-    ) -> dict[str, Any]:
+    ) -> TLObject:
         """Backward-compatible raw wrapper around :meth:`request_code`."""
 
-        return (await self.request_code(phone_number, settings=settings)).raw
+        return dict((await self.request_code(phone_number, settings=settings)).raw)
 
-    async def resend_code(
-        self,
-        phone_number: str,
-        phone_code_hash: str,
-    ) -> OtpChallenge:
-        """Ask Eitaa to use the next server-advertised OTP delivery method."""
-
+    async def resend_code(self, phone_number: str, phone_code_hash: str) -> OtpChallenge:
         phone = normalize_phone(phone_number)
         response = await self._invoke_otp(
             "auth.resendCode",
-            {
-                "phone_number": phone,
-                "phone_code_hash": phone_code_hash,
-            },
+            {"phone_number": phone, "phone_code_hash": phone_code_hash},
             operation=OtpOperation.RESEND,
         )
         return OtpChallenge.from_response(phone, response)
@@ -84,7 +62,7 @@ class AuthService:
         *,
         profile_name: str | None = None,
         save: bool = True,
-    ) -> dict[str, Any]:
+    ) -> TLObject:
         phone = normalize_phone(phone_number)
         response = await self._invoke_otp(
             "auth.signIn",
@@ -95,8 +73,8 @@ class AuthService:
             },
             operation=OtpOperation.SIGN_IN,
         )
-        if response.get("_") == "auth.authorization":
-            self._accept_authorization(response, phone, profile_name=profile_name, save=save)
+        if str_field(response, "_") == "auth.authorization":
+            await self._accept_authorization(response, phone, profile_name=profile_name, save=save)
         return response
 
     async def sign_up(
@@ -109,7 +87,7 @@ class AuthService:
         *,
         profile_name: str | None = None,
         save: bool = True,
-    ) -> dict[str, Any]:
+    ) -> TLObject:
         phone = normalize_phone(phone_number)
         settings = self.client.settings
         response = await self._invoke_otp(
@@ -120,69 +98,59 @@ class AuthService:
                 "phone_code": phone_code,
                 "first_name": first_name.strip(),
                 "last_name": last_name.strip(),
-                "app_info": {
-                    "_": "eitaaAppInfo",
-                    "build_version": settings.build_version,
-                    "device_model": f"Python {platform.python_version()}",
-                    "system_version": platform.platform(),
-                    "app_version": settings.app_version,
-                    "lang_code": settings.language_code,
-                    "sign": "",
-                },
+                "app_info": settings.web_profile.app_info(
+                    build_version=settings.build_version,
+                    app_version=settings.app_version,
+                ),
             },
             operation=OtpOperation.SIGN_UP,
         )
-        if response.get("_") == "auth.authorization":
-            self._accept_authorization(response, phone, profile_name=profile_name, save=save)
+        if str_field(response, "_") == "auth.authorization":
+            await self._accept_authorization(response, phone, profile_name=profile_name, save=save)
         return response
 
     async def _invoke_otp(
         self,
         method: str,
-        params: Mapping[str, Any],
+        params: Mapping[str, TLValue],
         *,
         operation: OtpOperation,
-    ) -> dict[str, Any]:
-        """Invoke one auth method and translate its raw RPC errors."""
-
+    ) -> TLObject:
         try:
-            response = await self.client.invoke(method, params, token="")
+            return await invoke_object(self.client, method, params, token="")
         except EitaaRPCError as exc:
             raise classify_otp_rpc_error(exc, operation=operation) from exc
-        if not isinstance(response, dict):
-            raise ValueError(
-                f"{method} returned {type(response).__name__}, expected an object response"
-            )
-        return response
 
-    async def logout(self, *, clear_local: bool = True) -> Any:
+    async def logout(self, *, clear_local: bool = True) -> TLValue:
         response = await self.client.invoke("auth.logOut")
         if clear_local:
-            self.client.store.delete(self.client.profile.name)
+            await self.client.store.adelete(self.client.profile.name)
         return response
 
-    def _accept_authorization(
+    async def _accept_authorization(
         self,
-        authorization: dict[str, Any],
+        authorization: TLObject,
         phone_number: str,
         *,
         profile_name: str | None,
         save: bool,
     ) -> None:
-        token = str(authorization.get("token") or "")
+        token = str_field(authorization, "token")
         if not token:
             return
         name = profile_name or phone_number or self.client.profile.name
+        raw_user = object_field(authorization, "user") or None
+        user = cast(EntityObject | None, raw_user)
         profile = SessionProfile(
             name=name,
             phone_number=phone_number,
             token=token,
             imei=self.client.profile.imei,
-            user=authorization.get("user"),
+            user=user,
         )
         self.client.profile = profile
         if save:
-            self.client.store.save(profile)
+            await self.client.store.asave(profile)
 
 
 def normalize_phone(phone_number: str) -> str:

@@ -11,7 +11,7 @@ Optional media metadata support uses Pillow and Mutagen.
 ## Install from a wheel
 
 ```bash
-python -m pip install ./eitaa_cli-0.4.0-py3-none-any.whl
+python -m pip install ./eitaa_cli-0.5.0-py3-none-any.whl
 ```
 
 ## Install from source
@@ -126,7 +126,7 @@ eitaa messages history 'channel:12345:987654321' --limit 30
 Interactive confirmation is enabled by default:
 
 ```bash
-eitaa messages send @username 'Hello from eitaa-cli'
+eitaa messages send @username 'Hello'
 ```
 
 For a reviewed script, bypass the prompt explicitly:

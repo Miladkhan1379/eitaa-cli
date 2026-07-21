@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+
+from eitaa_cli.api_types import InputPeer, InputPeerEmpty, TLObject
 
 
 class GlobalSearchScope(StrEnum):
@@ -68,12 +69,16 @@ class ParticipantFilter(StrEnum):
     MENTIONS = "mentions"
 
 
+def _empty_peer() -> InputPeerEmpty:
+    return {"_": "inputPeerEmpty"}
+
+
 @dataclass(frozen=True, slots=True)
 class SearchCursor:
     """Cursor used by Eitaa global message discovery."""
 
     offset_date: int = 0
-    offset_peer: dict[str, Any] = field(default_factory=lambda: {"_": "inputPeerEmpty"})
+    offset_peer: InputPeer = field(default_factory=_empty_peer)
     offset_id: int = 0
 
     def __post_init__(self) -> None:
@@ -82,7 +87,7 @@ class SearchCursor:
         if self.offset_id < 0:
             raise ValueError("offset_id cannot be negative")
 
-    def to_params(self) -> dict[str, Any]:
+    def to_params(self) -> TLObject:
         return {
             "offset_date": self.offset_date,
             "offset_peer": self.offset_peer,

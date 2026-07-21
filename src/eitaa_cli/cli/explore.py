@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
 
 import typer
 
+from eitaa_cli.api_types import (
+    CombinedExploreResult,
+    ContactsSearchResponse,
+    MessagesResponse,
+    ParticipantsResponse,
+    ResolvedPeerResponse,
+    TopPeersResponse,
+)
 from eitaa_cli.cli.runtime import console, run, state, with_client
 from eitaa_cli.client import EitaaClient
 from eitaa_cli.formatting import (
@@ -40,7 +47,7 @@ async def _global_search(
     offset_date: int,
     offset_peer: str | None,
     offset_id: int,
-) -> dict[str, Any]:
+) -> MessagesResponse:
     peer = (
         await client.peers.resolve(offset_peer)
         if offset_peer is not None
@@ -59,7 +66,7 @@ async def _global_search(
     )
 
 
-def _print_next_cursor(result: dict[str, Any]) -> None:
+def _print_next_cursor(result: MessagesResponse) -> None:
     cursor = next_search_cursor(result)
     if cursor is None:
         return
@@ -96,7 +103,7 @@ def explore_search(
 ) -> None:
     """Search messages across private chats, public content, or both."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> MessagesResponse:
         return await _global_search(
             client,
             query=query,
@@ -110,15 +117,12 @@ def explore_search(
 
     result = run(with_client(state(ctx).settings, action))
     if json_output:
-        payload = dict(result)
         cursor = next_search_cursor(result)
+        payload: dict[str, object] = dict(result)
         payload["_next_cursor"] = cursor.to_params() if cursor else None
         print_json(payload)
     else:
-        print_search_messages(
-            result,
-            title=f"Eitaa {scope.value} search: {query}",
-        )
+        print_search_messages(result, title=f"Eitaa {scope.value} search: {query}")
         _print_next_cursor(result)
 
 
@@ -131,7 +135,7 @@ def explore_entities(
 ) -> None:
     """Search users, groups, supergroups, and channels."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> ContactsSearchResponse:
         return await client.search.entities(query, limit=limit)
 
     result = run(with_client(state(ctx).settings, action))
@@ -149,7 +153,7 @@ def explore_all(
 ) -> None:
     """Run entity discovery and message discovery together."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> CombinedExploreResult:
         entities, messages = await asyncio.gather(
             client.search.entities(query, limit=limit),
             client.search.global_messages(
@@ -178,7 +182,7 @@ def explore_username(
 ) -> None:
     """Resolve one exact public username."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> ResolvedPeerResponse:
         return await client.search.resolve_username(username)
 
     result = run(with_client(state(ctx).settings, action))
@@ -199,7 +203,7 @@ def explore_top(
 ) -> None:
     """Show frequently contacted peers, groups, channels, bots, or calls."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> TopPeersResponse:
         return await client.search.top_peers(categories, offset=offset, limit=limit)
 
     result = run(with_client(state(ctx).settings, action))
@@ -223,7 +227,7 @@ def explore_members(
 ) -> None:
     """Explore members of a supergroup or channel."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> ParticipantsResponse:
         return await client.search.participants(
             channel,
             participant_filter=participant_filter,

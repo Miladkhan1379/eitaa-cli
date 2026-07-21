@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import cast
+
+from eitaa_cli.api_types import (
+    AuthSentCodeResponse,
+    OtpChallengeDict,
+    TLObject,
+    int_field,
+    object_field,
+    str_field,
+)
 
 
 class OtpDeliveryMethod(StrEnum):
@@ -40,11 +49,7 @@ _CODE_TYPES: dict[str, OtpDeliveryMethod] = {
 
 @dataclass(frozen=True, slots=True)
 class OtpCodeSettings:
-    """Flags accepted by Eitaa's ``codeSettings`` constructor.
-
-    These flags describe client capabilities; they do not guarantee that the
-    server will use a particular delivery method.
-    """
+    """Capabilities accepted by Eitaa's ``codeSettings`` constructor."""
 
     allow_flash_call: bool = False
     current_number: bool = False
@@ -54,8 +59,8 @@ class OtpCodeSettings:
         if self.current_number and not self.allow_flash_call:
             raise ValueError("current_number requires allow_flash_call")
 
-    def to_tl(self) -> dict[str, Any]:
-        value: dict[str, Any] = {"_": "codeSettings"}
+    def to_tl(self) -> TLObject:
+        value: TLObject = {"_": "codeSettings"}
         if self.allow_flash_call:
             value["allow_flashcall"] = True
         if self.current_number:
@@ -67,7 +72,7 @@ class OtpCodeSettings:
 
 @dataclass(frozen=True, slots=True)
 class OtpChallenge:
-    """Typed representation of an ``auth.SentCode`` response."""
+    """Validated representation of an ``auth.SentCode`` response."""
 
     phone_number: str
     phone_code_hash: str
@@ -76,40 +81,39 @@ class OtpChallenge:
     timeout_seconds: int | None
     code_length: int | None
     flash_call_pattern: str | None
-    raw: dict[str, Any]
+    raw: AuthSentCodeResponse
 
     @classmethod
-    def from_response(cls, phone_number: str, response: dict[str, Any]) -> OtpChallenge:
-        if response.get("_") != "auth.sentCode":
-            raise ValueError(
-                f"expected auth.sentCode, received {response.get('_', type(response).__name__)!r}"
-            )
-        sent_type = response.get("type") or {}
-        next_type = response.get("next_type") or {}
-        delivery = _SENT_CODE_TYPES.get(str(sent_type.get("_", "")), OtpDeliveryMethod.UNKNOWN)
-        next_delivery = _CODE_TYPES.get(str(next_type.get("_", "")))
-        length_value = sent_type.get("length")
-        timeout_value = response.get("timeout")
-        pattern_value = sent_type.get("pattern")
+    def from_response(cls, phone_number: str, response: TLObject) -> OtpChallenge:
+        predicate = str_field(response, "_")
+        if predicate != "auth.sentCode":
+            raise ValueError(f"expected auth.sentCode, received {predicate or '<unknown>'!r}")
+
+        sent_type = object_field(response, "type")
+        next_type = object_field(response, "next_type")
+        sent_predicate = str_field(sent_type, "_")
+        next_predicate = str_field(next_type, "_")
+        timeout = int_field(response, "timeout", default=-1)
+        length = int_field(sent_type, "length", default=-1)
+        pattern = str_field(sent_type, "pattern") or None
+
         return cls(
             phone_number=phone_number,
-            phone_code_hash=str(response.get("phone_code_hash") or ""),
-            delivery=delivery,
-            next_delivery=next_delivery,
-            timeout_seconds=int(timeout_value) if timeout_value is not None else None,
-            code_length=int(length_value) if length_value is not None else None,
-            flash_call_pattern=str(pattern_value) if pattern_value is not None else None,
-            raw=response,
+            phone_code_hash=str_field(response, "phone_code_hash"),
+            delivery=_SENT_CODE_TYPES.get(sent_predicate, OtpDeliveryMethod.UNKNOWN),
+            next_delivery=_CODE_TYPES.get(next_predicate),
+            timeout_seconds=timeout if timeout >= 0 else None,
+            code_length=length if length >= 0 else None,
+            flash_call_pattern=pattern,
+            raw=cast(AuthSentCodeResponse, response),
         )
 
     def supports_preference(self, preferred: OtpDeliveryMethod | OtpDeliveryPreference) -> bool:
-        """Return whether the current or advertised next delivery matches a preference."""
-
         return self.delivery.value == preferred.value or (
             self.next_delivery is not None and self.next_delivery.value == preferred.value
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> OtpChallengeDict:
         return {
             "phone_number": self.phone_number,
             "phone_code_hash": self.phone_code_hash,

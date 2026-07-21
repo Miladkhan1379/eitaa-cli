@@ -4,6 +4,9 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from eitaa_cli.api_types import TransportKind
+from eitaa_cli.transport.profile import WebClientProfile
+
 CLIENT_ENDPOINTS = (
     "https://hasan.eitaa.ir/eitaa/",
     "https://hosna.eitaa.com/eitaa/",
@@ -36,6 +39,18 @@ def _env_int(name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().casefold()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be true or false")
+
+
 @dataclass(slots=True)
 class EitaaSettings:
     """Runtime settings matching Eitaa Web build 4.6.12, API layer 135."""
@@ -48,7 +63,6 @@ class EitaaSettings:
     flags: int = 32
     app_version: str = "4.6.12 K"
     build_version: int = 2496
-    language_code: str = "fa"
     timeout: float = field(default_factory=lambda: float(os.getenv("EITAA_TIMEOUT", "45")))
     profile: str | None = field(default_factory=lambda: os.getenv("EITAA_PROFILE") or None)
     session_file: Path = field(
@@ -57,8 +71,20 @@ class EitaaSettings:
         ).expanduser()
     )
     endpoint: str | None = field(default_factory=lambda: os.getenv("EITAA_ENDPOINT") or None)
+    http2: bool = field(default_factory=lambda: _env_bool("EITAA_HTTP2", True))
+    web_profile: WebClientProfile = field(default_factory=WebClientProfile)
 
-    def endpoints(self, kind: str) -> tuple[str, ...]:
+    def __post_init__(self) -> None:
+        if self.api_id <= 0:
+            raise ValueError("api_id must be positive")
+        if not self.api_hash.strip():
+            raise ValueError("api_hash cannot be empty")
+        if self.layer <= 0:
+            raise ValueError("layer must be positive")
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+    def endpoints(self, kind: TransportKind) -> tuple[str, ...]:
         if self.endpoint:
             return (self.endpoint,)
         if kind == "download":

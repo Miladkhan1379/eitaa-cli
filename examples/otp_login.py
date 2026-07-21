@@ -8,7 +8,8 @@ from eitaa_cli.models import OtpCodeSettings
 
 async def main() -> None:
     phone = input("Phone number: ").strip()
-    async with EitaaClient(require_auth=False) as client:
+    client = await EitaaClient.create(require_auth=False)
+    async with client:
         challenge = await client.auth.request_code(
             phone,
             settings=OtpCodeSettings(),

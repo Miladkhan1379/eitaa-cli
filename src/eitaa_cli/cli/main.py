@@ -2,12 +2,24 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import typer
 from rich.table import Table
 
 from eitaa_cli import __version__
+from eitaa_cli.api_types import (
+    ContactsSearchResponse,
+    DialogsResponse,
+    EntityObject,
+    MessagesResponse,
+    ParticipantsResponse,
+    TLObject,
+    TLValue,
+    TransportKind,
+    object_list,
+    tl_from_json,
+)
 from eitaa_cli.cli.auth import auth_app
 from eitaa_cli.cli.explore import explore_app
 from eitaa_cli.cli.runtime import (
@@ -43,7 +55,7 @@ from eitaa_cli.tl.export import export_schema_files
 app = typer.Typer(
     no_args_is_help=True,
     invoke_without_command=True,
-    help="Direct Eitaa Web-compatible Python CLI.",
+    help="Command-line client for Eitaa.",
 )
 chats_app = typer.Typer(
     no_args_is_help=True, help="Browse private chats, groups, supergroups, and channels."
@@ -131,7 +143,7 @@ def _list_conversations(
     json_output: bool,
     title: str,
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> DialogsResponse:
         return await client.dialogs.list(
             limit,
             folder_id=folder_id,
@@ -200,7 +212,7 @@ def chats_info(
 ) -> None:
     """Show full information for a user, classic group, supergroup, or channel."""
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.dialogs.info(peer)
 
     result = _run(_with_client(_state(ctx).settings, action))
@@ -238,7 +250,7 @@ def messages_history(
     offset_id: int = typer.Option(0),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> MessagesResponse:
         return await client.messages.history(peer, limit=limit, offset_id=offset_id)
 
     result = _run(_with_client(_state(ctx).settings, action))
@@ -268,7 +280,7 @@ def messages_search(
 ) -> None:
     """Search within one chat, group, supergroup, or channel."""
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> MessagesResponse:
         return await client.messages.search(
             peer,
             query,
@@ -302,7 +314,7 @@ def messages_send(
     if not yes and not typer.confirm(f"Send to {peer!r}?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.messages.send_text(
             peer, text, reply_to=reply_to, silent=silent, no_webpage=no_webpage
         )
@@ -323,7 +335,7 @@ def messages_edit(
     if not yes and not typer.confirm(f"Edit message {message_id} in {peer!r}?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.messages.edit(peer, message_id, text)
 
     result = _run(_with_client(_state(ctx).settings, action))
@@ -342,7 +354,7 @@ def messages_delete(
     if not yes and not typer.confirm(f"Delete message(s) {message_ids}?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.messages.delete(message_ids, peer_reference=peer, revoke=revoke)
 
     result = _run(_with_client(_state(ctx).settings, action))
@@ -362,7 +374,7 @@ def messages_forward(
     if not yes and not typer.confirm(f"Forward {message_ids} from {source!r} to {destination!r}?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.messages.forward(source, destination, message_ids, silent=silent)
 
     result = _run(_with_client(_state(ctx).settings, action))
@@ -388,7 +400,7 @@ def media_send(
     if not yes and not typer.confirm(f"Upload and send {file} to {peer!r}?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.media.send_file(
             peer,
             file,
@@ -422,7 +434,7 @@ def media_album(
     ):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         return await client.media.send_album(
             peer, files, caption=caption, reply_to=reply_to, silent=silent
         )
@@ -435,7 +447,7 @@ def media_album(
 def media_download(
     ctx: typer.Context, peer: str, message_id: int, output: Path = Path("downloads")
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> Path:
         return await client.media.download_message(peer, message_id, output)
 
     path = _run(_with_client(_state(ctx).settings, action))
@@ -451,7 +463,7 @@ def contacts_search(
 ) -> None:
     """Search Eitaa users, groups, supergroups, and channels."""
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> ContactsSearchResponse:
         return await client.search.entities(query, limit=limit)
 
     result = _run(_with_client(_state(ctx).settings, action))
@@ -460,14 +472,15 @@ def contacts_search(
 
 @contacts_app.command("list")
 def contacts_list(ctx: typer.Context, json_output: bool = typer.Option(False, "--json")) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke("contacts.getContacts", {"hash": 0})
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object("contacts.getContacts", {"hash": 0})
 
     result = _run(_with_client(_state(ctx).settings, action))
-    print_json(result) if json_output else contacts_search_table(result.get("users", []))
+    users = [cast(EntityObject, user) for user in object_list(result, "users")]
+    print_json(result) if json_output else contacts_search_table(users)
 
 
-def contacts_search_table(users: list[dict[str, Any]]) -> None:
+def contacts_search_table(users: list[EntityObject]) -> None:
     table = Table(title="Eitaa contacts")
     table.add_column("Name")
     table.add_column("Username")
@@ -476,7 +489,7 @@ def contacts_search_table(users: list[dict[str, Any]]) -> None:
     for user in users:
         try:
             peer_json = json.dumps(entity_to_input_peer(user), ensure_ascii=False)
-        except Exception:
+        except ValueError:
             peer_json = "unresolvable"
         table.add_row(
             entity_title(user),
@@ -495,8 +508,8 @@ def contacts_import_phone(
     last_name: str = "",
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke(
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object(
             "contacts.importContacts",
             {
                 "contacts": [
@@ -524,9 +537,9 @@ def contacts_add(
     phone: str = "",
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         user = await client.peers.resolve_input_user(peer)
-        return await client.invoke(
+        return await client.invoke_object(
             "contacts.addContact",
             {
                 "id": user,
@@ -547,9 +560,9 @@ def contacts_delete(
     if not yes and not typer.confirm(f"Delete {len(peers)} contact(s)?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         users = [await client.peers.resolve_input_user(peer) for peer in peers]
-        return await client.invoke("contacts.deleteContacts", {"id": users})
+        return await client.invoke_object("contacts.deleteContacts", {"id": users})
 
     _run(_with_client(_state(ctx).settings, action))
     typer.echo("Contact(s) deleted.")
@@ -583,9 +596,9 @@ def groups_create(
     members: list[str],
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         users = [await client.peers.resolve_input_user(member) for member in members]
-        return await client.invoke("messages.createChat", {"users": users, "title": title})
+        return await client.invoke_object("messages.createChat", {"users": users, "title": title})
 
     result = _run(_with_client(_state(ctx).settings, action))
     print_json(result) if json_output else typer.echo("Group created.")
@@ -595,8 +608,8 @@ def groups_create(
 def groups_info(
     ctx: typer.Context, chat_id: int, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke("messages.getFullChat", {"chat_id": chat_id})
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object("messages.getFullChat", {"chat_id": chat_id})
 
     result = _run(_with_client(_state(ctx).settings, action))
     print_json(result)
@@ -604,9 +617,9 @@ def groups_info(
 
 @groups_app.command("add-member")
 def groups_add_member(ctx: typer.Context, chat_id: int, user: str, forward_limit: int = 50) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         input_user = await client.peers.resolve_input_user(user)
-        return await client.invoke(
+        return await client.invoke_object(
             "messages.addChatUser",
             {"chat_id": chat_id, "user_id": input_user, "fwd_limit": forward_limit},
         )
@@ -619,9 +632,9 @@ def groups_add_member(ctx: typer.Context, chat_id: int, user: str, forward_limit
 def groups_remove_member(
     ctx: typer.Context, chat_id: int, user: str, revoke_history: bool = False
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         input_user = await client.peers.resolve_input_user(user)
-        return await client.invoke(
+        return await client.invoke_object(
             "messages.deleteChatUser",
             {"chat_id": chat_id, "user_id": input_user, "revoke_history": revoke_history},
         )
@@ -659,8 +672,8 @@ def channels_create(
     supergroup: bool = typer.Option(False, "--supergroup"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke(
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object(
             "channels.createChannel",
             {"broadcast": not supergroup, "megagroup": supergroup, "title": title, "about": about},
         )
@@ -673,9 +686,9 @@ def channels_create(
 def channels_info(
     ctx: typer.Context, channel: str, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         value = await client.peers.resolve_input_channel(channel)
-        return await client.invoke("channels.getFullChannel", {"channel": value})
+        return await client.invoke_object("channels.getFullChannel", {"channel": value})
 
     result = _run(_with_client(_state(ctx).settings, action))
     print_json(result)
@@ -685,9 +698,9 @@ def channels_info(
 def channels_join(
     ctx: typer.Context, channel: str, json_output: bool = typer.Option(False, "--json")
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         value = await client.peers.resolve_input_channel(channel)
-        return await client.invoke("channels.joinChannel", {"channel": value})
+        return await client.invoke_object("channels.joinChannel", {"channel": value})
 
     result = _run(_with_client(_state(ctx).settings, action))
     print_json(result) if json_output else typer.echo("Joined channel/supergroup.")
@@ -700,9 +713,9 @@ def channels_leave(
     if not yes and not typer.confirm(f"Leave {channel!r}?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         value = await client.peers.resolve_input_channel(channel)
-        return await client.invoke("channels.leaveChannel", {"channel": value})
+        return await client.invoke_object("channels.leaveChannel", {"channel": value})
 
     _run(_with_client(_state(ctx).settings, action))
     typer.echo("Left channel/supergroup.")
@@ -725,7 +738,7 @@ def channels_members(
 ) -> None:
     """List or search members of a supergroup/channel."""
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> ParticipantsResponse:
         return await client.search.participants(
             channel,
             participant_filter=participant_filter,
@@ -741,10 +754,10 @@ def channels_members(
 
 @channels_app.command("invite")
 def channels_invite(ctx: typer.Context, channel: str, users: list[str]) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         value = await client.peers.resolve_input_channel(channel)
         input_users = [await client.peers.resolve_input_user(user) for user in users]
-        return await client.invoke(
+        return await client.invoke_object(
             "channels.inviteToChannel", {"channel": value, "users": input_users}
         )
 
@@ -761,16 +774,20 @@ def _invite_hash(value: str) -> str:
 
 @links_app.command("resolve")
 def links_resolve(ctx: typer.Context, username: str) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke("contacts.resolveUsername", {"username": username.lstrip("@")})
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object(
+            "contacts.resolveUsername", {"username": username.lstrip("@")}
+        )
 
     print_json(_run(_with_client(_state(ctx).settings, action)))
 
 
 @links_app.command("check")
 def links_check(ctx: typer.Context, invite: str) -> None:
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke("messages.checkChatInvite", {"hash": _invite_hash(invite)})
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object(
+            "messages.checkChatInvite", {"hash": _invite_hash(invite)}
+        )
 
     print_json(_run(_with_client(_state(ctx).settings, action)))
 
@@ -784,8 +801,10 @@ def links_join(
     if not yes and not typer.confirm("Join the chat/channel represented by this invite?"):
         raise typer.Abort()
 
-    async def action(client: EitaaClient) -> Any:
-        return await client.invoke("messages.importChatInvite", {"hash": _invite_hash(invite)})
+    async def action(client: EitaaClient) -> TLObject:
+        return await client.invoke_object(
+            "messages.importChatInvite", {"hash": _invite_hash(invite)}
+        )
 
     print_json(_run(_with_client(_state(ctx).settings, action)))
 
@@ -797,16 +816,22 @@ def links_export(
     expire_date: int | None = typer.Option(None, help="Unix timestamp."),
     usage_limit: int | None = typer.Option(None, min=1),
 ) -> None:
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLObject:
         input_peer = await client.peers.resolve(peer)
-        params: dict[str, Any] = {"peer": input_peer}
+        params: TLObject = {"peer": input_peer}
         if expire_date is not None:
             params["expire_date"] = expire_date
         if usage_limit is not None:
             params["usage_limit"] = usage_limit
-        return await client.invoke("messages.exportChatInvite", params)
+        return await client.invoke_object("messages.exportChatInvite", params)
 
     print_json(_run(_with_client(_state(ctx).settings, action)))
+
+
+def _parse_transport_kind(value: str) -> TransportKind:
+    if value in {"client", "upload", "download"}:
+        return cast(TransportKind, value)
+    raise ValueError("kind must be one of: client, upload, download")
 
 
 @raw_app.command("invoke")
@@ -821,9 +846,12 @@ def raw_invoke(
 ) -> None:
     payload = _load_json_argument(params)
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLValue:
         return await client.invoke(
-            method, payload, kind=kind, token="" if unauthenticated else None
+            method,
+            payload,
+            kind=_parse_transport_kind(kind),
+            token="" if unauthenticated else None,
         )
 
     result = _run(_with_client(_state(ctx).settings, action, auth=not unauthenticated))
@@ -905,9 +933,9 @@ def schema_export(output: Path = typer.Argument(Path("schemas-export"))) -> None
         typer.echo(str(path))
 
 
-def _load_json_argument(value: str) -> dict[str, Any]:
+def _load_json_argument(value: str) -> TLObject:
     text = Path(value[1:]).read_text(encoding="utf-8") if value.startswith("@") else value
-    parsed = json.loads(text)
+    parsed = tl_from_json(json.loads(text), context="raw params")
     if not isinstance(parsed, dict):
         raise ValueError("raw params must be a JSON object")
     return parsed

@@ -13,8 +13,9 @@ python -m pip install -e '.[dev,media,docs]'
 
 ```bash
 pytest -q
+ruff format --check src tests
 ruff check src tests
-mypy src
+mypy src/eitaa_cli
 ```
 
 The ordinary unit tests do not require network access or private captures.
@@ -34,13 +35,16 @@ payload values. Do not copy the HAR into the repository.
 ```text
 src/eitaa_cli/
   cli/          Typer command modules and shared CLI runtime
-  models/       typed OTP, search, cursor, and filter domain models
+  api_types.py  TypedDicts and validated dynamic TL boundary helpers
+  models/       immutable OTP, search, cursor, and filter domain models
+  rpc.py        minimal async RPC protocol and object-response validation
   services/     auth, search, dialogs, peers, messages, and media
   tl/           schema loader, codec, and TL export helpers
-  transport/    async HTTPS endpoint failover
+  transport/    async HTTP/2 transport and stable web request profile
   data/         installed JSON and TL schema files
   client.py     public async client
-  session.py    secure multi-profile token persistence
+  session.py    secure sync/async multi-profile token persistence
+  py.typed      PEP 561 marker for downstream type checkers
 schemas/        source-visible extracted/reconstructed schemas
 proto/          explanation that protobuf is not used
 scripts/        schema export utility
@@ -73,7 +77,8 @@ with guessed constructor IDs.
 - asynchronous I/O for HTTP and file operations;
 - no browser automation or browser session dependency;
 - explicit peer resolution and reusable access hashes;
-- typed domain models at service boundaries, raw TL dictionaries at the codec boundary;
+- strict typing with `TypedDict`, dataclasses, enums, and protocols at service boundaries;
+- runtime-validated dynamic TL values only at the codec boundary;
 - small cohesive command modules for authentication and exploration;
 - confirmation for externally visible/destructive CLI actions;
 - no captured credentials or private traffic in the package.

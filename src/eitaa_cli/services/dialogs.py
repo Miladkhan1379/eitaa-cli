@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any
+from typing import cast
 
+from eitaa_cli.api_types import (
+    DialogObject,
+    DialogsResponse,
+    EntityObject,
+    InputPeerChannel,
+    InputPeerChat,
+    InputPeerUser,
+    MessageObject,
+    PeerKey,
+    PeerReference,
+    TLObject,
+    int_field,
+    object_field,
+    object_list,
+)
+from eitaa_cli.rpc import ServiceClient, invoke_object
 from eitaa_cli.services.peers import peer_key
-
-if TYPE_CHECKING:
-    from eitaa_cli.client import EitaaClient
-
 
 DIALOG_KINDS = frozenset({"private", "group", "supergroup", "channel"})
 
@@ -15,7 +27,7 @@ DIALOG_KINDS = frozenset({"private", "group", "supergroup", "channel"})
 class DialogsService:
     """Read and filter the user's conversation list."""
 
-    def __init__(self, client: EitaaClient) -> None:
+    def __init__(self, client: ServiceClient) -> None:
         self.client = client
 
     async def list(
@@ -26,8 +38,10 @@ class DialogsService:
         kinds: Iterable[str] | None = None,
         query: str | None = None,
         unread_only: bool = False,
-    ) -> dict[str, Any]:
-        params: dict[str, Any] = {
+    ) -> DialogsResponse:
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        params: TLObject = {
             "offset_date": 0,
             "offset_id": 0,
             "offset_peer": {"_": "inputPeerEmpty"},
@@ -36,7 +50,10 @@ class DialogsService:
         }
         if folder_id is not None:
             params["folder_id"] = folder_id
-        result = await self.client.invoke("messages.getDialogs", params)
+        result = cast(
+            DialogsResponse,
+            await invoke_object(self.client, "messages.getDialogs", params),
+        )
         if kinds or query or unread_only:
             return filter_dialog_result(
                 result,
@@ -46,48 +63,96 @@ class DialogsService:
             )
         return result
 
-    async def private(self, limit: int = 50, **kwargs: Any) -> dict[str, Any]:
-        return await self.list(limit, kinds={"private"}, **kwargs)
+    async def private(
+        self,
+        limit: int = 50,
+        *,
+        folder_id: int | None = None,
+        query: str | None = None,
+        unread_only: bool = False,
+    ) -> DialogsResponse:
+        return await self.list(
+            limit,
+            folder_id=folder_id,
+            kinds={"private"},
+            query=query,
+            unread_only=unread_only,
+        )
 
-    async def groups(self, limit: int = 50, **kwargs: Any) -> dict[str, Any]:
-        return await self.list(limit, kinds={"group", "supergroup"}, **kwargs)
+    async def groups(
+        self,
+        limit: int = 50,
+        *,
+        folder_id: int | None = None,
+        query: str | None = None,
+        unread_only: bool = False,
+    ) -> DialogsResponse:
+        return await self.list(
+            limit,
+            folder_id=folder_id,
+            kinds={"group", "supergroup"},
+            query=query,
+            unread_only=unread_only,
+        )
 
-    async def channels(self, limit: int = 50, **kwargs: Any) -> dict[str, Any]:
-        return await self.list(limit, kinds={"channel"}, **kwargs)
+    async def channels(
+        self,
+        limit: int = 50,
+        *,
+        folder_id: int | None = None,
+        query: str | None = None,
+        unread_only: bool = False,
+    ) -> DialogsResponse:
+        return await self.list(
+            limit,
+            folder_id=folder_id,
+            kinds={"channel"},
+            query=query,
+            unread_only=unread_only,
+        )
 
-    async def info(self, reference: str | dict[str, Any]) -> dict[str, Any]:
+    async def info(self, reference: PeerReference) -> TLObject:
         peer = await self.client.peers.resolve(reference)
-        predicate = peer.get("_")
-        if predicate in {"inputPeerSelf", "inputPeerUser"}:
-            input_user = (
-                {"_": "inputUserSelf"}
-                if predicate == "inputPeerSelf"
-                else {
-                    "_": "inputUser",
-                    "user_id": peer["user_id"],
-                    "access_hash": peer["access_hash"],
-                }
+        predicate = peer["_"]
+        if predicate == "inputPeerSelf":
+            return await invoke_object(
+                self.client, "users.getFullUser", {"id": {"_": "inputUserSelf"}}
             )
-            return await self.client.invoke("users.getFullUser", {"id": input_user})
+        if predicate == "inputPeerUser":
+            user = cast(InputPeerUser, peer)
+            return await invoke_object(
+                self.client,
+                "users.getFullUser",
+                {
+                    "id": {
+                        "_": "inputUser",
+                        "user_id": user["user_id"],
+                        "access_hash": user["access_hash"],
+                    }
+                },
+            )
         if predicate == "inputPeerChat":
-            return await self.client.invoke("messages.getFullChat", {"chat_id": peer["chat_id"]})
+            chat = cast(InputPeerChat, peer)
+            return await invoke_object(
+                self.client, "messages.getFullChat", {"chat_id": chat["chat_id"]}
+            )
         if predicate == "inputPeerChannel":
-            return await self.client.invoke(
+            channel = cast(InputPeerChannel, peer)
+            return await invoke_object(
+                self.client,
                 "channels.getFullChannel",
                 {
                     "channel": {
                         "_": "inputChannel",
-                        "channel_id": peer["channel_id"],
-                        "access_hash": peer["access_hash"],
+                        "channel_id": channel["channel_id"],
+                        "access_hash": channel["access_hash"],
                     }
                 },
             )
         raise ValueError(f"unsupported peer type: {predicate!r}")
 
 
-def entity_kind(entity: dict[str, Any]) -> str:
-    """Classify an API entity as private, classic group, supergroup, or channel."""
-
+def entity_kind(entity: EntityObject) -> str:
     predicate = entity.get("_")
     if predicate in {"user", "userEmpty"}:
         return "private"
@@ -100,83 +165,83 @@ def entity_kind(entity: dict[str, Any]) -> str:
     return "unknown"
 
 
-def dialog_entity_map(result: dict[str, Any]) -> dict[tuple[str, int], dict[str, Any]]:
-    entities: dict[tuple[str, int], dict[str, Any]] = {}
+def dialog_entity_map(result: DialogsResponse) -> dict[PeerKey, EntityObject]:
+    entities: dict[PeerKey, EntityObject] = {}
     for user in result.get("users", []):
-        entities[("user", int(user.get("id", 0)))] = user
+        entities[("user", user.get("id", 0))] = user
     for chat in result.get("chats", []):
-        key_kind = "channel" if chat.get("_") in {"channel", "channelForbidden"} else "chat"
-        entities[(key_kind, int(chat.get("id", 0)))] = chat
+        kind = "channel" if chat.get("_") in {"channel", "channelForbidden"} else "chat"
+        entities[(kind, chat.get("id", 0))] = chat
     return entities
 
 
 def filter_dialog_result(
-    result: dict[str, Any],
+    result: DialogsResponse,
     *,
     kinds: set[str],
     query: str | None = None,
     unread_only: bool = False,
-) -> dict[str, Any]:
+) -> DialogsResponse:
     unknown = kinds - DIALOG_KINDS
     if unknown:
         raise ValueError(f"unknown dialog kind(s): {', '.join(sorted(unknown))}")
 
     entities = dialog_entity_map(result)
     normalized_query = (query or "").casefold().strip()
-    selected_dialogs: list[dict[str, Any]] = []
-    selected_keys: set[tuple[str, int]] = set()
+    selected_dialogs: list[DialogObject] = []
+    selected_keys: set[PeerKey] = set()
     selected_message_ids: set[int] = set()
 
     for dialog in result.get("dialogs", []):
-        key = peer_key(dialog.get("peer", {}))
-        entity = entities.get(key, {})
-        if entity_kind(entity) not in kinds:
+        key = peer_key(object_field(cast(TLObject, dialog), "peer"))
+        entity = entities.get(key)
+        if entity is None or entity_kind(entity) not in kinds:
             continue
-        if unread_only and int(dialog.get("unread_count", 0)) <= 0:
+        if unread_only and dialog.get("unread_count", 0) <= 0:
             continue
         if normalized_query and not _entity_contains(entity, normalized_query):
             continue
         selected_dialogs.append(dialog)
         selected_keys.add(key)
-        selected_message_ids.add(int(dialog.get("top_message", 0)))
+        selected_message_ids.add(dialog.get("top_message", 0))
 
-    filtered = dict(result)
-    filtered["dialogs"] = selected_dialogs
-    filtered["users"] = [
-        user
-        for user in result.get("users", [])
-        if ("user", int(user.get("id", 0))) in selected_keys
+    messages = [
+        cast(MessageObject, message)
+        for message in object_list(cast(TLObject, result), "messages")
+        if int_field(message, "id") in selected_message_ids
     ]
-    filtered["chats"] = [
-        chat
-        for chat in result.get("chats", [])
-        if (
-            "channel" if chat.get("_") in {"channel", "channelForbidden"} else "chat",
-            int(chat.get("id", 0)),
-        )
-        in selected_keys
-    ]
-    filtered["messages"] = [
-        message
-        for message in result.get("messages", [])
-        if int(message.get("id", 0)) in selected_message_ids
-    ]
-    if "count" in filtered:
+    filtered: DialogsResponse = {
+        "_": result.get("_", "messages.dialogs"),
+        "dialogs": selected_dialogs,
+        "users": [
+            user for user in result.get("users", []) if ("user", user.get("id", 0)) in selected_keys
+        ],
+        "chats": [
+            chat
+            for chat in result.get("chats", [])
+            if (
+                "channel" if chat.get("_") in {"channel", "channelForbidden"} else "chat",
+                chat.get("id", 0),
+            )
+            in selected_keys
+        ],
+        "messages": messages,
+    }
+    if "count" in result:
         filtered["count"] = len(selected_dialogs)
     return filtered
 
 
-def _entity_contains(entity: dict[str, Any], query: str) -> bool:
-    values = (
-        entity.get("title"),
-        entity.get("username"),
-        entity.get("phone"),
-        entity.get("first_name"),
-        entity.get("last_name"),
-        " ".join(
-            value
-            for value in [str(entity.get("first_name") or ""), str(entity.get("last_name") or "")]
-            if value
-        ),
+def _entity_contains(entity: EntityObject, query: str) -> bool:
+    full_name = " ".join(
+        value for value in [entity.get("first_name", ""), entity.get("last_name", "")] if value
     )
-    return any(query in str(value).casefold() for value in values if value)
+    values = (
+        entity.get("title", ""),
+        entity.get("username", ""),
+        entity.get("phone", ""),
+        entity.get("first_name", ""),
+        entity.get("last_name", ""),
+        full_name,
+    )
+    return any(query in value.casefold() for value in values if value)

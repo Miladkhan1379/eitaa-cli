@@ -10,14 +10,19 @@ captured application transport.
 ## Transport
 
 ```text
-POST https://<endpoint>/eitaa/
-Content-Type: application/octet-stream
+POST https://<endpoint>/eitaa/ over HTTP/2
 Origin: https://web.eitaa.com
+Body: raw TL-encoded bytes
 ```
 
 The client contains separate endpoint pools for ordinary API calls, uploads, and
-downloads. `HttpTransport` rotates through the relevant pool after HTTP or
-network failures.
+downloads. `HttpTransport` reuses an async HTTP/2 client and fails over through
+the relevant pool when an endpoint cannot complete the request. The transport
+does not add package, Python-runtime, or HTTP-library branding to headers.
+
+The captured request did not require an explicit `Content-Type`; the body is
+sent as raw bytes. See [HTTP compatibility profile](http-profile.md) for the
+stable request metadata and its limitations.
 
 An explicit endpoint can be forced with:
 

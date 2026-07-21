@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+from typing import cast
 
 import typer
 from rich.table import Table
 
+from eitaa_cli.api_types import TLObject, TLValue, int_field, object_field, str_field
 from eitaa_cli.cli.error_reporting import humanize_duration
 from eitaa_cli.cli.runtime import console, run, state, with_client
 from eitaa_cli.client import EitaaClient
@@ -15,7 +17,7 @@ from eitaa_cli.models.auth import (
     OtpDeliveryPreference,
 )
 from eitaa_cli.services.auth import normalize_phone
-from eitaa_cli.session import SessionStore
+from eitaa_cli.session import SessionProfile, SessionStore
 
 auth_app = typer.Typer(no_args_is_help=True, help="OTP login, signup, and saved sessions.")
 
@@ -200,7 +202,7 @@ def auth_login(
 ) -> None:
     """Request or reuse an OTP challenge, then authorize the account."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> TLObject:
         active_hash = phone_code_hash
         if active_hash is None:
             challenge = await client.auth.request_code(
@@ -214,7 +216,7 @@ def auth_login(
             active_hash = challenge.phone_code_hash
             if not json_output:
                 _print_challenge(challenge, preferred=delivery)
-        entered_code = code or typer.prompt("Eitaa OTP code")
+        entered_code = code or cast(str, await asyncio.to_thread(typer.prompt, "Eitaa OTP code"))
         result = await client.auth.sign_in(
             phone_number,
             active_hash,
@@ -222,8 +224,8 @@ def auth_login(
             profile_name=state(ctx).settings.profile or normalize_phone(phone_number),
             save=save,
         )
-        if result.get("_") == "auth.authorizationSignUpRequired":
-            name = first_name or typer.prompt("First name")
+        if str_field(result, "_") == "auth.authorizationSignUpRequired":
+            name = first_name or cast(str, await asyncio.to_thread(typer.prompt, "First name"))
             result = await client.auth.sign_up(
                 phone_number,
                 active_hash,
@@ -239,9 +241,9 @@ def auth_login(
     if json_output:
         print_json(response)
     else:
-        user = response.get("user", {})
-        typer.echo(f"authenticated: {response.get('_') == 'auth.authorization'}")
-        typer.echo(f"user_id: {user.get('id', '')}")
+        user = object_field(response, "user")
+        typer.echo(f"authenticated: {str_field(response, '_') == 'auth.authorization'}")
+        typer.echo(f"user_id: {int_field(user, 'id') or ''}")
         typer.echo(f"profile: {state(ctx).settings.profile or normalize_phone(phone_number)}")
 
 
@@ -258,14 +260,14 @@ def auth_signup(
 ) -> None:
     """Complete registration for a phone number that requires signup."""
 
-    async def action(client: EitaaClient) -> dict[str, Any]:
+    async def action(client: EitaaClient) -> TLObject:
         active_hash = phone_code_hash
         if active_hash is None:
             challenge = await client.auth.request_code(phone_number)
             active_hash = challenge.phone_code_hash
             if not json_output:
                 _print_challenge(challenge, preferred=delivery)
-        entered_code = code or typer.prompt("Eitaa OTP code")
+        entered_code = code or cast(str, await asyncio.to_thread(typer.prompt, "Eitaa OTP code"))
         return await client.auth.sign_up(
             phone_number,
             active_hash,
@@ -282,8 +284,12 @@ def auth_signup(
 @auth_app.command("status")
 def auth_status(ctx: typer.Context, json_output: bool = typer.Option(False, "--json")) -> None:
     settings = state(ctx).settings
-    profile = SessionStore(settings.session_file).get(settings.profile)
-    data = {
+
+    async def action() -> SessionProfile:
+        return await SessionStore(settings.session_file).aget(settings.profile)
+
+    profile = run(action())
+    data: dict[str, object] = {
         "profile": profile.name,
         "authenticated": profile.authenticated,
         "phone_number": profile.phone_number,
@@ -296,7 +302,8 @@ def auth_status(ctx: typer.Context, json_output: bool = typer.Option(False, "--j
 
 @auth_app.command("profiles")
 def auth_profiles(ctx: typer.Context) -> None:
-    active, profiles = SessionStore(state(ctx).settings.session_file).list_profiles()
+    store = SessionStore(state(ctx).settings.session_file)
+    active, profiles = run(store.alist_profiles())
     table = Table(title="Eitaa session profiles")
     table.add_column("Active")
     table.add_column("Name")
@@ -314,7 +321,8 @@ def auth_profiles(ctx: typer.Context) -> None:
 
 @auth_app.command("use")
 def auth_use(ctx: typer.Context, profile: str) -> None:
-    SessionStore(state(ctx).settings.session_file).set_active(profile)
+    store = SessionStore(state(ctx).settings.session_file)
+    run(store.aset_active(profile))
     typer.echo(f"Active profile: {profile}")
 
 
@@ -322,12 +330,17 @@ def auth_use(ctx: typer.Context, profile: str) -> None:
 def auth_logout(ctx: typer.Context, local_only: bool = typer.Option(False, "--local-only")) -> None:
     settings = state(ctx).settings
     if local_only:
-        profile = SessionStore(settings.session_file).get(settings.profile)
-        SessionStore(settings.session_file).delete(profile.name)
+        store = SessionStore(settings.session_file)
+
+        async def remove_local_profile() -> None:
+            profile = await store.aget(settings.profile)
+            await store.adelete(profile.name)
+
+        run(remove_local_profile())
         typer.echo("Local session removed.")
         return
 
-    async def action(client: EitaaClient) -> Any:
+    async def action(client: EitaaClient) -> TLValue:
         return await client.auth.logout()
 
     run(with_client(settings, action))
