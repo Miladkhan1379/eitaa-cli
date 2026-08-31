@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import stat
 from pathlib import Path
 
@@ -25,15 +24,7 @@ def test_session_store_round_trip_and_permissions(tmp_path: Path) -> None:
     loaded = store.get("work", create=False)
     assert loaded == profile
     assert store.list_profiles()[0] == "work"
-    if os.name != "nt":
-        if os.name != "nt":
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    else:
-        # Windows uses ACLs rather than POSIX owner/group/other mode bits.
-        assert path.is_file()
-    else:
-        # Windows uses ACLs rather than POSIX owner/group/other mode bits.
-        assert path.is_file()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_generated_imei_matches_web_client_shape() -> None:

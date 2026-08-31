@@ -1,0 +1,24 @@
+name: Protocol research
+description: Track reverse-engineering/validation of an Eitaa API method
+title: "protocol: "
+labels: ["protocol", "needs-testing"]
+body:
+  - type: input
+    id: method
+    attributes:
+      label: TL method / constructor
+      placeholder: updates.getDifference
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence / observed behavior
+      description: Do not include bearer tokens, OTPs, phone numbers, private messages or HAR secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: Safe test plan
+      description: Describe read-only or controlled test steps.
