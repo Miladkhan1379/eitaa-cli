@@ -19,7 +19,8 @@ from eitaa_cli.api_types import (
     object_list,
 )
 from eitaa_cli.rpc import ServiceClient, invoke_object
-from eitaa_cli.services.peers import peer_key
+from eitaa_cli.errors import PeerResolutionError
+from eitaa_cli.services.peers import entity_to_input_peer, peer_key
 
 DIALOG_KINDS = frozenset({"private", "group", "supergroup", "channel"})
 
@@ -41,27 +42,114 @@ class DialogsService:
     ) -> DialogsResponse:
         if limit < 1:
             raise ValueError("limit must be positive")
-        params: TLObject = {
-            "offset_date": 0,
-            "offset_id": 0,
-            "offset_peer": {"_": "inputPeerEmpty"},
-            "limit": limit,
-            "hash": 0,
+
+        selected_kinds = set(kinds or DIALOG_KINDS)
+        unknown = selected_kinds - DIALOG_KINDS
+        if unknown:
+            raise ValueError(
+                f"unknown dialog kind(s): {', '.join(sorted(unknown))}"
+            )
+
+        page_size = min(max(limit, 1), 100)
+
+        offset_date = 0
+        offset_id = 0
+        offset_peer: TLObject = {"_": "inputPeerEmpty"}
+
+        combined: DialogsResponse = {
+            "_": "messages.dialogs",
+            "dialogs": [],
+            "messages": [],
+            "users": [],
+            "chats": [],
         }
-        if folder_id is not None:
-            params["folder_id"] = folder_id
-        result = cast(
-            DialogsResponse,
-            await invoke_object(self.client, "messages.getDialogs", params),
-        )
-        if kinds or query or unread_only:
-            return filter_dialog_result(
-                result,
-                kinds=set(kinds or DIALOG_KINDS),
+
+        seen_cursors: set[tuple[int, int, str]] = set()
+        seen_dialogs: set[PeerKey] = set()
+        seen_users: set[int] = set()
+        seen_chats: set[tuple[str, int]] = set()
+        seen_messages: set[tuple[PeerKey, int]] = set()
+
+        total_count: int | None = None
+
+        while True:
+            params: TLObject = {
+                "offset_date": offset_date,
+                "offset_id": offset_id,
+                "offset_peer": offset_peer,
+                "limit": page_size,
+                "hash": 0,
+            }
+
+            if folder_id is not None:
+                params["folder_id"] = folder_id
+
+            page = cast(
+                DialogsResponse,
+                await invoke_object(
+                    self.client,
+                    "messages.getDialogs",
+                    params,
+                ),
+            )
+
+            if total_count is None and "count" in page:
+                total_count = page.get("count", 0)
+
+            page_dialogs = page.get("dialogs", [])
+            if not page_dialogs:
+                return filter_dialog_result(
+                    combined,
+                    kinds=selected_kinds,
+                    query=query,
+                    unread_only=unread_only,
+                )
+
+            _merge_dialog_page(
+                combined,
+                page,
+                seen_dialogs=seen_dialogs,
+                seen_users=seen_users,
+                seen_chats=seen_chats,
+                seen_messages=seen_messages,
+            )
+
+            if total_count is not None:
+                combined["count"] = total_count
+
+            filtered = filter_dialog_result(
+                combined,
+                kinds=selected_kinds,
                 query=query,
                 unread_only=unread_only,
             )
-        return result
+
+            if len(filtered.get("dialogs", [])) >= limit:
+                return _slice_dialog_result(filtered, limit)
+
+            if total_count is not None and len(seen_dialogs) >= total_count:
+                return filtered
+
+            cursor = _next_dialog_cursor(page)
+            if cursor is None:
+                return filtered
+
+            next_offset_date, next_offset_id, next_offset_peer = cursor
+
+            cursor_key = (
+                next_offset_date,
+                next_offset_id,
+                repr(next_offset_peer),
+            )
+
+            if cursor_key in seen_cursors:
+                return filtered
+
+            seen_cursors.add(cursor_key)
+
+            offset_date = next_offset_date
+            offset_id = next_offset_id
+            offset_peer = next_offset_peer
 
     async def private(
         self,
@@ -151,6 +239,191 @@ class DialogsService:
             )
         raise ValueError(f"unsupported peer type: {predicate!r}")
 
+def _merge_dialog_page(
+    target: DialogsResponse,
+    page: DialogsResponse,
+    *,
+    seen_dialogs: set[PeerKey],
+    seen_users: set[int],
+    seen_chats: set[tuple[str, int]],
+    seen_messages: set[tuple[PeerKey, int]],
+) -> None:
+    for dialog in page.get("dialogs", []):
+        key = peer_key(object_field(cast(TLObject, dialog), "peer"))
+
+        if key in seen_dialogs:
+            continue
+
+        seen_dialogs.add(key)
+        target["dialogs"].append(dialog)
+
+    for user in page.get("users", []):
+        identifier = user.get("id", 0)
+
+        if identifier in seen_users:
+            continue
+
+        seen_users.add(identifier)
+        target["users"].append(user)
+
+    for chat in page.get("chats", []):
+        kind = (
+            "channel"
+            if chat.get("_") in {"channel", "channelForbidden"}
+            else "chat"
+        )
+        key = (kind, chat.get("id", 0))
+
+        if key in seen_chats:
+            continue
+
+        seen_chats.add(key)
+        target["chats"].append(chat)
+
+    for message in page.get("messages", []):
+        message_object = cast(TLObject, message)
+
+        try:
+            message_peer = object_field(message_object, "peer_id")
+            key = peer_key(message_peer)
+        except (KeyError, TypeError, ValueError):
+            key = ("unknown", 0)
+
+        message_key = (
+            key,
+            int_field(message_object, "id"),
+        )
+
+        if message_key in seen_messages:
+            continue
+
+        seen_messages.add(message_key)
+        target["messages"].append(message)
+
+
+def _next_dialog_cursor(
+    page: DialogsResponse,
+) -> tuple[int, int, TLObject] | None:
+    dialogs = page.get("dialogs", [])
+
+    if not dialogs:
+        return None
+
+    last_dialog = dialogs[-1]
+    last_dialog_object = cast(TLObject, last_dialog)
+
+    peer = object_field(last_dialog_object, "peer")
+    key = peer_key(peer)
+
+    top_message_id = int_field(
+        last_dialog_object,
+        "top_message",
+    )
+
+    offset_date = 0
+
+    for message in object_list(
+        cast(TLObject, page),
+        "messages",
+    ):
+        if int_field(message, "id") != top_message_id:
+            continue
+
+        try:
+            message_peer = object_field(message, "peer_id")
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        if peer_key(message_peer) != key:
+            continue
+
+        offset_date = int_field(message, "date")
+        break
+
+    entities = dialog_entity_map(page)
+    entity = entities.get(key)
+
+    offset_peer: TLObject = {"_": "inputPeerEmpty"}
+
+    if entity is not None:
+        try:
+            offset_peer = cast(
+                TLObject,
+                entity_to_input_peer(entity),
+            )
+        except PeerResolutionError:
+            # Some incomplete/forbidden entities may not expose
+            # the access hash required for an input peer.
+            offset_peer = {"_": "inputPeerEmpty"}
+
+    return offset_date, top_message_id, offset_peer
+
+
+def _slice_dialog_result(
+    result: DialogsResponse,
+    limit: int,
+) -> DialogsResponse:
+    dialogs = result.get("dialogs", [])[:limit]
+
+    selected_keys: set[PeerKey] = set()
+    selected_message_ids: set[int] = set()
+
+    for dialog in dialogs:
+        dialog_object = cast(TLObject, dialog)
+
+        selected_keys.add(
+            peer_key(
+                object_field(
+                    dialog_object,
+                    "peer",
+                )
+            )
+        )
+
+        selected_message_ids.add(
+            int_field(
+                dialog_object,
+                "top_message",
+            )
+        )
+
+    sliced: DialogsResponse = {
+        "_": result.get("_", "messages.dialogs"),
+        "dialogs": dialogs,
+        "users": [
+            user
+            for user in result.get("users", [])
+            if ("user", user.get("id", 0))
+            in selected_keys
+        ],
+        "chats": [
+            chat
+            for chat in result.get("chats", [])
+            if (
+                (
+                    "channel"
+                    if chat.get("_")
+                    in {"channel", "channelForbidden"}
+                    else "chat"
+                ),
+                chat.get("id", 0),
+            )
+            in selected_keys
+        ],
+        "messages": [
+            cast(MessageObject, message)
+            for message in object_list(
+                cast(TLObject, result),
+                "messages",
+            )
+            if int_field(message, "id")
+            in selected_message_ids
+        ],
+    }
+
+    sliced["count"] = len(dialogs)
+
+    return sliced
 
 def entity_kind(entity: EntityObject) -> str:
     predicate = entity.get("_")
