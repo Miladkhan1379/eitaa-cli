@@ -29,6 +29,7 @@ def test_session_store_round_trip_and_permissions(tmp_path: Path) -> None:
     if os.name != "nt":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
     else:
+        # Windows uses ACLs rather than POSIX owner/group/other mode bits.
         assert path.is_file()
 
 
@@ -42,12 +43,7 @@ def test_generated_imei_matches_web_client_shape() -> None:
 @pytest.mark.asyncio
 async def test_async_session_store_round_trip(tmp_path: Path) -> None:
     store = SessionStore(tmp_path / "sessions.json")
-    profile = SessionProfile(
-        name="async",
-        phone_number="98912",
-        token="token",
-        imei="imei",
-    )
+    profile = SessionProfile(name="async", phone_number="98912", token="token", imei="imei")
 
     await store.asave(profile)
 

@@ -1,39 +1,21 @@
 # Eitaa Next Roadmap
 
-## v0.8 — Usability & stable source references
+## v0.9 — current
+- Interactive source picker
+- Resume-safe bulk download jobs
+- Hybrid raw-update + polling sync
+- Multi-account fleet
+- systemd / Windows background services
+- Local web dashboard
+- Automation wizard
+- n8n starter workflow
+- health/metrics endpoints
 
-- [x] Complete dialog pagination
-- [x] Safe ambiguous peer resolution
-- [x] Compact dialog/message output
-- [x] Server-side scheduled messages/media/forward
-- [x] Archive/folder helpers
-- [x] Bulk history/media helpers
-- [x] SQLite incremental sync
-- [x] New/edit message events
-- [x] Idempotent automation delivery ledger
-- [x] n8n webhooks + HMAC + retry
-- [x] Source registry (`source:alias`)
-- [x] Peer resolver UI
-- [x] Readable sync/automation status
-- [x] GitHub CI and issue templates
-- [x] Platform-aware Windows session permission test
-
-## v0.9 — Low latency & operations
-
-- [ ] Validate `updates.getState/getDifference` on real Eitaa accounts
-- [ ] Hybrid event engine (updates when valid, polling fallback)
-- [ ] systemd service templates
-- [ ] graceful daemon shutdown/restart health
-- [ ] automatic source import from selected channel/group lists
-- [ ] resumable and filtered bulk downloads
-- [ ] structured rotating logs
-
-## v1.0 — Automation platform
-
-- [ ] Stable event contract
-- [ ] migrations/versioned SQLite schema
-- [ ] local management dashboard
-- [ ] interactive automation editor
-- [ ] rule enable/disable and schedules
-- [ ] metrics/health endpoint for n8n/monitoring
-- [ ] multi-account source registry and routing
+## v1.0 candidates
+- Validate true byte-range media resume against real Eitaa download endpoints
+- Decode more `updates.*` variants after real-account captures
+- Dashboard automation editor with CRUD for rules
+- Dashboard start/stop controls for managed workers
+- Per-account private source registry where access hashes differ
+- Optional encrypted/OS-keyring session backend
+- Structured audit log and log rotation

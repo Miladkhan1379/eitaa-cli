@@ -1,0 +1,53 @@
+{
+  "name": "Eitaa Next - Webhook Starter",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eitaa-next",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8cf78b85-96a6-4dd1-a7a6-3ad5be0ef4b1",
+      "name": "Eitaa Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-420, 0],
+      "webhookId": "eitaa-next-starter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body ?? $json;\nreturn [{json:{event_id:b.event_id,event_type:b.event_type,profile:b.profile ?? '',source:b.source,message_id:b.message_id,text:b.text ?? '',media_type:b.media_type ?? '',raw:b}}];"
+      },
+      "id": "19e02ce9-1c8d-4e8d-a1c9-70847c34ebc9",
+      "name": "Normalize Eitaa Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\":true,\"event_id\":\"{{$json.event_id}}\"}"
+      },
+      "id": "e81c2197-b608-46fb-b08d-6e8a653c32f7",
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [100, 0]
+    }
+  ],
+  "connections": {
+    "Eitaa Webhook": {
+      "main": [[{"node": "Normalize Eitaa Event", "type": "main", "index": 0}]]
+    },
+    "Normalize Eitaa Event": {
+      "main": [[{"node": "Acknowledge", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "versionId": "1b7f69fb-0fe5-4dd2-9ba2-b63fbf4ca9a8",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

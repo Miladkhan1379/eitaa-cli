@@ -15,8 +15,10 @@ from eitaa_cli.cli.runtime import state as _state
 from eitaa_cli.cli.runtime import with_client as _with_client
 from eitaa_cli.client import EitaaClient
 from eitaa_cli.sync_engine import SyncStore
+from eitaa_cli.download_manager import DownloadStore
+from eitaa_cli.session import SessionStore
 
-NEXT_VERSION = "0.8.0"
+NEXT_VERSION = "0.9.0"
 
 next_app = typer.Typer(
     no_args_is_help=True,
@@ -29,19 +31,27 @@ def _db_path(value: Path) -> Path:
 
 
 @next_app.command("status")
-def next_status(db: Path = typer.Option(Path(".eitaa-next.db"), "--db")) -> None:
+def next_status(ctx: typer.Context, db: Path = typer.Option(Path(".eitaa-next.db"), "--db")) -> None:
     """Readable dashboard for sync state, source aliases, and automation deliveries."""
     path = _db_path(db)
     with SyncStore(path) as store:
         sources = store.list_registered_sources()
         checkpoints = store.status()
         stats = store.delivery_stats()
+    with DownloadStore(path) as download_store:
+        jobs = download_store.job_rows()
+    sessions = SessionStore(_state(ctx).settings.session_file)
+    try:
+        _active, profiles = sessions.list_profiles()
+        account_count = len(profiles)
+    except Exception:
+        account_count = 0
     console.print(
         Panel(
             f"[bold]eitaa-next[/bold] v{NEXT_VERSION}\n"
             f"State DB: {path}\n"
-            f"Saved sources: {len(sources)}    Synced sources: {len(checkpoints)}\n"
-            f"Deliveries: [green]{stats['done']} done[/green] / "
+            f"Accounts: {account_count}    Saved sources: {len(sources)}    Synced sources: {len(checkpoints)}\n"
+            f"Download jobs: {len(jobs)}    Deliveries: [green]{stats['done']} done[/green] / "
             f"[red]{stats['failed']} failed[/red]",
             title="Eitaa Next",
             border_style="cyan",

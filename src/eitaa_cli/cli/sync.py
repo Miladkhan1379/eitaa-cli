@@ -19,6 +19,7 @@ from eitaa_cli.cli.runtime import state as _state
 from eitaa_cli.cli.runtime import with_client as _with_client
 from eitaa_cli.client import EitaaClient
 from eitaa_cli.formatting import print_json
+from eitaa_cli.hybrid_sync import HybridUpdateSync
 from eitaa_cli.sync_engine import IncrementalSync, SyncEvent, SyncStore
 
 
@@ -207,3 +208,85 @@ def probe_updates(
         return result
 
     print_json(_run(_with_client(_state(ctx).settings, action)))
+
+
+@sync_app.command("hybrid")
+def sync_hybrid(
+    ctx: typer.Context,
+    sources: list[str] = typer.Argument(..., help="Watched username/source alias/typed peers."),
+    db: Path = typer.Option(Path(".eitaa-next.db"), "--db"),
+    poll: float = typer.Option(5.0, "--poll", min=2.0),
+    webhook: str | None = typer.Option(None, "--webhook"),
+    secret: str = typer.Option("", "--secret"),
+    once: bool = typer.Option(False, "--once"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Hybrid low-latency updates.getDifference + durable polling fallback."""
+
+    async def action(client: EitaaClient) -> None:
+        path = _db_path(db)
+        store = SyncStore(path)
+        resolved = [store.resolve_source(source) for source in sources]
+        profile = _state(ctx).settings.profile or "default"
+        engine = HybridUpdateSync(client, store, profile=profile)
+        try:
+            if not json_output:
+                print_watch_header(
+                    list(zip(sources, resolved)),
+                    db=path,
+                    poll=poll,
+                    webhook=webhook,
+                    include_edits=True,
+                    once=once,
+                    dry_run=False,
+                )
+                console.print(
+                    "[cyan]Mode:[/cyan] hybrid updates.getDifference with automatic polling fallback"
+                )
+            while True:
+                events, mode = await engine.poll(resolved)
+                if not json_output and events:
+                    console.print(f"[dim]update mode: {mode}[/dim]")
+                for event in events:
+                    if json_output:
+                        payload = event.as_dict()
+                        payload["sync_mode"] = mode
+                        print_json(payload)
+                    else:
+                        print_event(event)
+                    if webhook:
+                        await _post_event(webhook, event, secret=secret, timeout=15.0, retries=3)
+                if once:
+                    return
+                await asyncio.sleep(poll)
+        finally:
+            engine.close()
+            store.close()
+
+    _run(_with_client(_state(ctx).settings, action))
+
+
+@sync_app.command("capabilities")
+def sync_capabilities(ctx: typer.Context) -> None:
+    """Probe raw update methods and report whether hybrid mode can be attempted."""
+    async def action(client: EitaaClient) -> dict[str, Any]:
+        result: dict[str, Any] = {"getState": False, "getDifference": False, "state": None, "error": ""}
+        try:
+            state = await client.invoke("updates.getState", {})
+            result["getState"] = isinstance(state, dict)
+            result["state"] = state
+            if isinstance(state, dict):
+                params: TLObject = {
+                    "pts": int(state.get("pts", 0) or 0),
+                    "date": int(state.get("date", 0) or 0),
+                    "qts": int(state.get("qts", 0) or 0),
+                }
+                diff = await client.invoke("updates.getDifference", params)
+                result["getDifference"] = isinstance(diff, dict)
+                result["difference_type"] = diff.get("_") if isinstance(diff, dict) else type(diff).__name__
+        except Exception as exc:
+            result["error"] = str(exc)
+        return result
+
+    result = _run(_with_client(_state(ctx).settings, action))
+    print_json(result)

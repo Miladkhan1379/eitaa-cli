@@ -1,69 +1,167 @@
-# eitaa-next v0.8 — بسته ارتقای eitaa-cli
+# Eitaa Next v0.9 — بسته ارتقای تجمعی برای eitaa-cli
 
-v0.8 یک بسته تجمعی است: اصلاحات pagination و قابلیت‌های v0.6/v0.7 را نگه می‌دارد و روی خوانایی CLI، Peerهای پایدار، source alias، عملیات روزمره و GitHub workflow تمرکز می‌کند.
+این بسته روی Fork فعلی `eitaa-cli` اعمال می‌شود و قابلیت‌های v0.6 تا v0.8.1 را نگه می‌دارد. قبل از Patch، از فایل‌های تغییرپذیر Backup خودکار در `.eitaa-next-backup/` ساخته می‌شود.
 
-## مهم‌ترین تغییر v0.8: دیگر Peer طولانی را حفظ نکن
+## امکانات اصلی v0.9
 
-برای کانال public:
-
-```powershell
-eitaa sources add news @my_channel --label "اخبار"
-```
-
-برای کانال/گروه بدون username هم هر Peer معتبری که از لیست گرفته‌ای بده:
+### 1) انتخاب تعاملی کانال/گروه
+دیگر لازم نیست Peer را دستی پیدا یا کپی کنید:
 
 ```powershell
-eitaa sources add private-news "channel:12345:987654321"
+eitaa sources pick medical --kind channel
 ```
 
-بعد از این در Sync می‌توانی فقط بنویسی:
+جدول کانال‌ها نمایش داده می‌شود، شماره را انتخاب می‌کنید و بعد در تمام فرمان‌ها می‌نویسید:
 
 ```powershell
-eitaa sync watch source:news
+eitaa sync watch source:medical --once
 ```
 
-یا:
+### 2) دانلود گروهی حرفه‌ای و Resume در سطح Job
 
 ```powershell
-eitaa sync watch source:news source:private-news --poll 5
+eitaa downloads run source:medical --type video --type document --after 2026-01-01 --limit 5000 -o .\downloads
 ```
 
-برای دیدن aliasها:
+ویژگی‌ها:
+- ادامه Job بعد از قطع برنامه
+- عدم دانلود دوباره فایل‌های موفق
+- Retry فایل‌های ناموفق
+- فیلتر photo/video/document/audio/voice/gif
+- فیلتر بازه تاریخ
+- محدودیت اندازه Document/Video در صورت موجود بودن metadata
+- Progress bar
+- SQLite ledger
+
+وضعیت:
 
 ```powershell
-eitaa sources list
+eitaa downloads status
+eitaa downloads failures JOB_ID
+eitaa downloads retry JOB_ID
 ```
 
-## اگر نمی‌دانی چه Peerای بدهی
+> Resume در v0.9 در سطح message/job است. فایل موفق دوباره دانلود نمی‌شود. Resume بایت‌به‌بایت وسط یک فایل تا زمانی که Range/offset دانلود ایتا روی سرور واقعی اعتبارسنجی نشود ادعا نمی‌شود.
+
+### 3) Hybrid Update Engine
 
 ```powershell
-eitaa peers formats
+eitaa sync capabilities
 ```
 
-و برای تبدیل یک username/name/reference به فرم مطمئن:
+سپس:
 
 ```powershell
-eitaa peers resolve @my_channel
+eitaa sync hybrid source:medical --poll 5
 ```
 
-خروجی `Stable` برای سرویس طولانی‌مدت مناسب‌ترین گزینه است.
+این حالت `updates.getState/getDifference` را امتحان می‌کند و در هر خطا، gap بزرگ یا پاسخ پشتیبانی‌نشده به Sync incremental مطمئن برمی‌گردد. Polling همچنان safety net است تا تغییرات ناشناخته API باعث از دست رفتن پیام نشوند.
+
+### 4) Multi-account
+
+اکانت‌های لاگین‌شده:
+
+```powershell
+eitaa accounts list
+eitaa accounts check
+```
+
+تغییر اکانت فعال:
+
+```powershell
+eitaa accounts use work
+```
+
+Watch همزمان چند اکانت:
+
+```powershell
+eitaa fleet watch source:medical --profile work --profile personal --poll 5
+```
+
+اگر `--profile` ندهید، همه Profileهای authenticated استفاده می‌شوند. State هر اکانت در SQLite جدا ذخیره می‌شود.
+
+### 5) سرویس دائمی Windows و Linux/VPS
+
+Linux user systemd (بدون root برای خود unit):
+
+```bash
+eitaa service systemd source:medical --install
+```
+
+لاگ:
+
+```bash
+journalctl --user -u eitaa-next-sync.service -f
+```
+
+Windows Task Scheduler + restart loop:
+
+```powershell
+eitaa service windows source:medical --install
+```
+
+### 6) Web Dashboard
+
+```powershell
+eitaa web start
+```
+
+سپس:
+
+```text
+http://127.0.0.1:8765
+```
+
+پنل شامل:
+- Accounts
+- Sources
+- Sync checkpoints
+- Failed automation actions
+- Download jobs
+- Send message
+- Schedule message
+- Sync once
+- `/healthz`
+- `/metrics` با خروجی Prometheus text format
+
+برای bind روی شبکه، Token لازم است:
+
+```powershell
+eitaa web start --host 0.0.0.0 --token "CHANGE-ME"
+```
+
+### 7) Automation Wizard
+
+```powershell
+eitaa automation wizard --config automations.json
+```
+
+برای ساخت ruleهای رایج بدون ویرایش دستی JSON.
+
+### 8) n8n Starter Workflow
+
+داخل پوشه `n8n/` فایل importable قرار دارد:
+
+```text
+n8n/eitaa-next-webhook-workflow.json
+```
 
 ## نصب
 
-در PowerShell داخل پوشه بسته:
+PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install-eitaa-next.ps1 "D:\milad\Project\eitaa-cli\eitaa-cli"
 ```
 
-یا:
+یا مستقیم با Python:
 
 ```powershell
 python .\apply_eitaa_next.py "D:\milad\Project\eitaa-cli\eitaa-cli"
 ```
 
-بعد:
+## تست بعد از نصب
 
 ```powershell
 cd D:\milad\Project\eitaa-cli\eitaa-cli
@@ -72,119 +170,32 @@ python -m compileall -q src\eitaa_cli
 pytest -q
 ```
 
-## دستورات UI جدید
+Smoke test:
 
 ```powershell
-eitaa next status
-eitaa next doctor
-eitaa next failures
+eitaa next doctor --probe-updates
+eitaa accounts list
+eitaa sync capabilities
+eitaa sources pick test --kind channel
+eitaa downloads status
+eitaa web start
 ```
 
-و:
+## Peer پیشنهادی
+
+برای PowerShell username را بدون `@` هم می‌توانید بدهید:
 
 ```powershell
-eitaa sources list
-eitaa peers resolve @channel
-eitaa automation list automations.json
-eitaa automation status automations.json
-eitaa automation failures automations.json
-eitaa messages export @news_channel .\exports\news.jsonl --limit 5000
-```
-
-## Sync برای n8n
-
-بار اول فقط checkpoint:
-
-```powershell
-eitaa sync watch source:news --once
-```
-
-بعد اجرای دائمی:
-
-```powershell
-eitaa sync watch source:news `
-  --poll 5 `
-  --webhook "http://127.0.0.1:5678/webhook/eitaa" `
-  --secret "MY_SECRET"
-```
-
-خروجی interactive حالا خلاصه است:
-
-```text
-NEW  19:05:12 #1842  channel:...  متن پیام...
-EDIT 19:07:40 #1842  channel:...  متن ویرایش‌شده...
-```
-
-برای مصرف ماشینی همچنان از JSON استفاده کن:
-
-```powershell
-eitaa sync watch source:news --json
-```
-
-## Source registry
-
-```powershell
-eitaa sources add news @news_channel
-eitaa sources show news
-eitaa sources test news
-eitaa sources remove news
-```
-
-فرمت alias در `sync` و Automation config:
-
-```text
-source:news
-```
-
-Alias در SQLite ذخیره می‌شود و پشت آن stable typed peer قرار می‌گیرد.
-
-## قابلیت‌های مهم نسخه‌های قبل
-
-- pagination کامل Dialog/Channel/Group
-- Peer resolution امن‌تر برای اسم‌های مبهم
-- ارسال و Reply/Edit/Delete/Forward
-- پیام، media و forward زمان‌بندی‌شده server-side
-- Scheduled message management
-- Pin/Unpin/Read/Draft
-- History چندصفحه‌ای
-- دانلود گروهی media و profile photo
-- Archive/Unarchive/Folder
-- SQLite incremental sync
-- `new_message` و `edited_message`
-- automation actionهای forward/copy/reply/send/schedule/download/webhook
-- delivery ledger برای جلوگیری از action تکراری بعد از crash
-- HMAC و idempotency header برای n8n
-- `updates.getState/getDifference` probe آزمایشی
-
-## GitHub
-
-بعد از نصب فایل‌های زیر داخل fork کپی می‌شوند:
-
-- `.github/workflows/ci.yml`
-- `.github/ISSUE_TEMPLATE/*`
-- `.github/PULL_REQUEST_TEMPLATE.md`
-- `GITHUB_SETUP_FA.md`
-- `ROADMAP_EITAA_NEXT.md`
-- `CONTRIBUTING_EITAA_NEXT.md`
-
-راهنمای دقیق Issue/Project/Branch در `GITHUB_SETUP_FA.md` است.
-
-## امنیت
-
-- `.eitaa-next.db` و session file را private نگه دار.
-- token، OTP، شماره تلفن، متن خصوصی و capture/HAR را در GitHub public نگذار.
-- برای webhook خارج localhost از `--secret` استفاده کن.
-- Eitaa غیررسمی/reverse-engineered است؛ رفتار API ممکن است تغییر کند.
-
-
-## PowerShell و نام کاربری بدون @ (v0.8.1)
-
-در PowerShell بهتر است username را بدون `@` بدهید. eitaa-next آن را خودکار normalize می‌کند:
-
-```powershell
-eitaa sync watch rayat_info --once
-eitaa sources add medical rayat_info --label "رایات"
 eitaa peers resolve rayat_info
 ```
 
-اگر می‌خواهید `@` را بنویسید، آن را quote کنید: `'@rayat_info'`.
+برای کار طولانی بهتر است یک Alias بسازید:
+
+```powershell
+eitaa sources add medical rayat_info --label "Rayat"
+eitaa sync hybrid source:medical
+```
+
+## نکته امنیتی
+
+Eitaa Next غیررسمی است و به Eitaa وابستگی رسمی ندارد. Session token را مثل رمز عبور نگهداری کنید. Web dashboard به‌صورت پیش‌فرض فقط روی localhost اجرا می‌شود؛ آن را بدون Token مستقیماً روی اینترنت expose نکنید.

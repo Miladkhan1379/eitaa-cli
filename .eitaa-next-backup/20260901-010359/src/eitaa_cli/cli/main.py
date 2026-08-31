@@ -27,11 +27,6 @@ from eitaa_cli.cli.sync import sync_app
 from eitaa_cli.cli.sources import sources_app
 from eitaa_cli.cli.peers import peers_app
 from eitaa_cli.cli.next import next_app
-from eitaa_cli.cli.downloads import downloads_app
-from eitaa_cli.cli.accounts import accounts_app
-from eitaa_cli.cli.fleet import fleet_app
-from eitaa_cli.cli.service import service_app
-from eitaa_cli.cli.web import web_app
 from eitaa_cli.cli.explore import explore_app
 from eitaa_cli.cli.runtime import (
     CLIState,
@@ -106,11 +101,6 @@ app.add_typer(sync_app, name="sync")
 app.add_typer(sources_app, name="sources")
 app.add_typer(peers_app, name="peers")
 app.add_typer(next_app, name="next")
-app.add_typer(downloads_app, name="downloads")
-app.add_typer(accounts_app, name="accounts")
-app.add_typer(fleet_app, name="fleet")
-app.add_typer(service_app, name="service")
-app.add_typer(web_app, name="web")
 register_enhancements(messages_app, media_app, chats_app, groups_app, channels_app)
 
 

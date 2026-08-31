@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -144,3 +145,59 @@ def automation_run(
         await runner.run(once=once)
 
     _run(_with_client(_state(ctx).settings, action))
+
+
+@automation_app.command("wizard")
+def automation_wizard(
+    path: Path = typer.Option(Path("automations.json"), "--config"),
+) -> None:
+    """Interactively append a common automation rule without hand-editing JSON."""
+    target = path.expanduser().resolve()
+    if target.exists():
+        data = load_config(target)
+    else:
+        write_example(target)
+        data = load_config(target)
+        # The generated examples are useful documentation but surprising in a
+        # wizard-created production config, so ask before keeping them.
+        if not typer.confirm("Keep the example rules already in the new file?", default=False):
+            data["rules"] = []
+    name = typer.prompt("Rule name")
+    source = typer.prompt("Source (for example source:news or username)")
+    event = typer.prompt("Event", default="new_message")
+    contains = typer.prompt("Contains text (blank = any)", default="", show_default=False)
+    action_type = typer.prompt(
+        "Action type",
+        default="webhook",
+        type=typer.Choice(["webhook", "forward", "copy", "reply", "send", "download", "schedule"]),
+    )
+    action: dict[str, Any] = {"type": action_type}
+    if action_type == "webhook":
+        action["url"] = typer.prompt("Webhook URL", default="http://127.0.0.1:5678/webhook/eitaa")
+        secret = typer.prompt("HMAC secret (blank = none)", default="", show_default=False)
+        if secret:
+            action["secret"] = secret
+        action["retries"] = 3
+    elif action_type in {"forward", "copy", "send", "schedule"}:
+        action["to"] = typer.prompt("Destination peer/source")
+        if action_type in {"send", "schedule"}:
+            action["text"] = typer.prompt("Text/template", default="{text}")
+        if action_type == "schedule":
+            action["delay_seconds"] = typer.prompt("Delay seconds", default=60, type=int)
+    elif action_type == "reply":
+        action["text"] = typer.prompt("Reply/template", default="{text}")
+    elif action_type == "download":
+        action["to"] = typer.prompt("Download directory", default="downloads")
+    rule: dict[str, Any] = {
+        "name": name,
+        "source": source,
+        "events": [event],
+        "incoming_only": True,
+        "actions": [action],
+    }
+    if contains:
+        rule["contains"] = contains
+    cast(list[dict[str, Any]], data["rules"]).append(rule)
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    console.print(f"[green]Added[/green] {name!r} to {target}")
+    console.print("Check it with: eitaa automation check " + str(target))

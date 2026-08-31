@@ -1,36 +1,40 @@
-# v0.8.1 hotfix
+# Eitaa Next Changelog
 
-- Accept bare public usernames such as `rayat_info` and normalize them to `@rayat_info`.
-- Fix PowerShell usability where unquoted `@username` can be consumed by the shell.
-- Apply normalization to sync, source aliases, automation source resolution, and peer inspection.
+## v0.9.0
 
-# eitaa-next changelog
-
-## v0.8.0
-
-### CLI / UX
-- Added `eitaa peers resolve` and `eitaa peers formats`.
-- Added persistent source aliases: `eitaa sources add/list/show/remove/test`.
-- `eitaa sync watch` accepts `source:alias`.
-- Added readable Rich startup panel and one-line NEW/EDIT event output.
-- Sync status and automation status now render compact tables.
-- Added `eitaa next status`, `eitaa next failures`, and `eitaa next doctor`.
-- Dialog and message tables are more compact and easier to scan.
-- Added `eitaa messages export PEER OUTPUT --format jsonl|json`.
+### Added
+- Interactive source/channel/group picker: `eitaa sources pick`.
+- Resumable bulk-media job manager with SQLite deduplication and retry ledger.
+- Media filters by type, date range and metadata size.
+- `downloads status/failures/retry` commands.
+- Hybrid `updates.getDifference` + durable polling fallback engine.
+- `sync capabilities` probe.
+- Multi-account profile commands and simultaneous `fleet watch`.
+- Linux user systemd service generator/installer.
+- Windows Task Scheduler + restart-loop generator/installer.
+- Local browser dashboard with quick send/schedule/sync actions.
+- `/healthz` and Prometheus-style `/metrics` endpoints.
+- Interactive automation rule wizard.
+- Importable n8n starter workflow.
 
 ### Reliability
-- Direct sync webhooks now retry with bounded exponential backoff.
-- Source aliases resolve to stable typed peers before background polling.
-- Added delivery failure inspection.
-- Windows session permission test is platform-aware instead of assuming POSIX mode bits.
+- Hybrid mode never disables polling safety checks.
+- `updates.differenceTooLong` triggers polling gap recovery and state reseed.
+- Download resume is message/job-level; completed files are verified to still exist before being skipped.
+- Multi-account state is isolated per account profile.
 
-### GitHub / development
-- Added Windows + Linux CI for Python 3.11 and 3.13.
-- Added bug, feature, and protocol issue templates.
-- Added pull request template, roadmap, contributing notes, and Persian GitHub setup guide.
+### Security
+- Dashboard remains localhost-only by default.
+- Non-local dashboard binding requires an access token.
+
+## v0.8.1
+- Shell-friendly peer normalization, stable source aliases and PowerShell username hotfix.
+
+## v0.8
+- Readable CLI tables, source registry, improved GitHub workflow/CI.
 
 ## v0.7
-- SQLite incremental sync, edit detection, delivery ledger, n8n webhook signing/retry and experimental updates probe.
+- SQLite sync state, idempotent delivery ledger, edit detection and n8n webhooks.
 
 ## v0.6
-- Complete dialog pagination, safer peer resolution, scheduling, media/history helpers, folders and automation actions.
+- Scheduled messages, media helpers, folder/archive helpers and initial automation layer.

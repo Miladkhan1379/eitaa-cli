@@ -1,6 +1,6 @@
 [project]
 name = "eitaa-cli"
-version = "0.9.0"
+version = "0.5.0"
 description = "Async, typed command-line client for Eitaa's TL-over-HTTPS API."
 readme = "README.md"
 requires-python = ">=3.11"
