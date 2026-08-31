@@ -25,7 +25,6 @@ def test_session_store_round_trip_and_permissions(tmp_path: Path) -> None:
     loaded = store.get("work", create=False)
     assert loaded == profile
     assert store.list_profiles()[0] == "work"
-
     if os.name != "nt":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
     else:
@@ -46,7 +45,6 @@ async def test_async_session_store_round_trip(tmp_path: Path) -> None:
     profile = SessionProfile(name="async", phone_number="98912", token="token", imei="imei")
 
     await store.asave(profile)
-
     loaded = await store.aget("async", create=False)
     active, profiles = await store.alist_profiles()
 

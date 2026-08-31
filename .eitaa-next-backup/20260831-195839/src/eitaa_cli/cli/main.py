@@ -23,10 +23,6 @@ from eitaa_cli.api_types import (
 from eitaa_cli.cli.auth import auth_app
 from eitaa_cli.cli.automation import automation_app
 from eitaa_cli.cli.enhancements import register_enhancements
-from eitaa_cli.cli.sync import sync_app
-from eitaa_cli.cli.sources import sources_app
-from eitaa_cli.cli.peers import peers_app
-from eitaa_cli.cli.next import next_app
 from eitaa_cli.cli.explore import explore_app
 from eitaa_cli.cli.runtime import (
     CLIState,
@@ -97,10 +93,6 @@ app.add_typer(links_app, name="links")
 app.add_typer(raw_app, name="raw")
 app.add_typer(schema_app, name="schema")
 app.add_typer(automation_app, name="automation")
-app.add_typer(sync_app, name="sync")
-app.add_typer(sources_app, name="sources")
-app.add_typer(peers_app, name="peers")
-app.add_typer(next_app, name="next")
 register_enhancements(messages_app, media_app, chats_app, groups_app, channels_app)
 
 

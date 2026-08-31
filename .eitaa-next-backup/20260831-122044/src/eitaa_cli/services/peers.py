@@ -76,31 +76,7 @@ class PeerResolver:
             raise PeerResolutionError(f"no Eitaa peer found for {reference!r}")
         lowered = query.casefold()
         exact = [entity for entity in candidates if _entity_matches(entity, lowered)]
-        if len(exact) == 1:
-            return entity_to_input_peer(exact[0])
-        if len(exact) > 1:
-            candidates = exact
-        if len(candidates) == 1:
-            return entity_to_input_peer(candidates[0])
-        preview: list[str] = []
-        for entity in candidates[:8]:
-            title = str(entity.get("title") or "").strip()
-            if not title:
-                title = " ".join(
-                    str(value)
-                    for value in (entity.get("first_name"), entity.get("last_name"))
-                    if value
-                ).strip()
-            username = str(entity.get("username") or "").strip()
-            identifier = int(entity.get("id", 0))
-            label = title or username or str(identifier)
-            if username:
-                label = f"{label} (@{username})"
-            preview.append(label)
-        raise PeerResolutionError(
-            f"ambiguous Eitaa peer {reference!r}; use @username or a typed peer reference. "
-            f"Matches: {', '.join(preview)}"
-        )
+        return entity_to_input_peer(exact[0] if exact else candidates[0])
 
     async def resolve_input_user(self, reference: PeerReference) -> InputUser | InputUserSelf:
         peer = await self.resolve(reference)

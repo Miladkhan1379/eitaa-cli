@@ -32,7 +32,6 @@ class EitaaClient:
 
         from eitaa_cli.services.auth import AuthService
         from eitaa_cli.services.dialogs import DialogsService
-        from eitaa_cli.services.extras import ExtrasService
         from eitaa_cli.services.media import MediaService
         from eitaa_cli.services.messages import MessagesService
         from eitaa_cli.services.peers import PeerResolver
@@ -44,7 +43,6 @@ class EitaaClient:
         self.search = SearchService(self)
         self.messages = MessagesService(self)
         self.media = MediaService(self)
-        self.extras = ExtrasService(self)
 
     @classmethod
     async def create(
