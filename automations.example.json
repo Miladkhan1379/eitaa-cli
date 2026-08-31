@@ -1,0 +1,32 @@
+{
+  "poll_seconds": 5,
+  "state_db": ".eitaa-next.db",
+  "max_actions_per_cycle": 100,
+  "max_scan_messages_per_source": 5000,
+  "revisit_messages": 25,
+  "rules": [
+    {
+      "name": "send-news-to-n8n",
+      "source": "source:news",
+      "events": ["new_message", "edited_message"],
+      "incoming_only": true,
+      "actions": [
+        {
+          "type": "webhook",
+          "url": "http://127.0.0.1:5678/webhook/eitaa",
+          "retries": 3,
+          "secret": "change-me"
+        }
+      ]
+    },
+    {
+      "name": "save-media",
+      "source": "source:media",
+      "events": ["new_message"],
+      "media_only": true,
+      "actions": [
+        {"type": "download", "to": "downloads/media"}
+      ]
+    }
+  ]
+}

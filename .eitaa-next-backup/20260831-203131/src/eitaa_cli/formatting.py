@@ -74,13 +74,18 @@ def reusable_peer_reference(entity: EntityObject | None) -> str:
 
 
 def print_dialogs(result: DialogsResponse, *, title: str = "Eitaa chats") -> None:
-    """Compact default list: readable name + the easiest reusable peer."""
+    """Print a compact conversation table with a human-friendly reusable peer.
+
+    Usernames are preferred when available because they are easy to copy and the
+    resolver already accepts them. Private/classic peers without a username keep
+    the stable typed reference form.
+    """
     entities = dialog_entity_map(result)
     table = Table(title=title, show_lines=False, pad_edge=False)
     table.add_column("#", justify="right", style="dim", no_wrap=True)
     table.add_column("Name", overflow="ellipsis", max_width=42)
-    table.add_column("Type", no_wrap=True)
-    table.add_column("Use", overflow="fold", max_width=46)
+    table.add_column("Kind", no_wrap=True)
+    table.add_column("Peer", overflow="fold", max_width=48)
     table.add_column("Unread", justify="right", no_wrap=True)
     for index, dialog in enumerate(result.get("dialogs", []), start=1):
         dialog_object = cast(TLObject, dialog)
@@ -90,45 +95,34 @@ def print_dialogs(result: DialogsResponse, *, title: str = "Eitaa chats") -> Non
         username = str(entity.get("username") or "") if entity else ""
         peer_reference = f"@{username}" if username else reusable_peer_reference(entity)
         unread = int(dialog.get("unread_count", 0))
-        unread_text = f"[bold yellow]{unread}[/bold yellow]" if unread else ""
         table.add_row(
             str(index),
             title_value,
             entity_kind(entity or _UNKNOWN_ENTITY),
             peer_reference,
-            unread_text,
+            str(unread) if unread else "",
         )
     console.print(table)
-    console.print(
-        f"[dim]{len(result.get('dialogs', []))} conversation(s) · "
-        "Use `eitaa peers resolve PEER` for the stable typed reference.[/dim]"
-    )
+    console.print(f"[dim]{len(result.get('dialogs', []))} conversation(s)[/dim]")
 
 def print_messages(result: MessagesResponse) -> None:
-    """Readable compact history table for interactive use."""
-    table = Table(title="Eitaa messages", show_lines=False, pad_edge=False)
-    table.add_column("ID", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Time", no_wrap=True)
-    table.add_column("Dir", justify="center", no_wrap=True)
-    table.add_column("Message", overflow="fold", max_width=100)
+    table = Table(title="Eitaa messages")
+    table.add_column("ID", justify="right")
+    table.add_column("Date")
+    table.add_column("Direction")
+    table.add_column("Text / media", overflow="fold")
     for message in result.get("messages", []):
         message_object = cast(TLObject, message)
         date = _format_timestamp(message.get("date", 0))
-        if date:
-            date = date.replace("+00:00", "")[:19]
-        direction = "[green]→[/green]" if bool(message_object.get("out")) else "[blue]←[/blue]"
         text = _message_summary(message_object)
-        compact = " ".join(text.split())
-        if len(compact) > 500:
-            compact = compact[:497] + "..."
         table.add_row(
             str(message.get("id", "")),
             date,
-            direction,
-            compact,
+            "out" if bool(message_object.get("out")) else "in",
+            text[:500],
         )
     console.print(table)
-    console.print(f"[dim]{len(result.get('messages', []))} message(s)[/dim]")
+
 
 def entity_title(entity: EntityObject | None) -> str:
     if entity is None:

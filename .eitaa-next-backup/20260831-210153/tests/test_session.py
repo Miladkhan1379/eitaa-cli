@@ -26,11 +26,7 @@ def test_session_store_round_trip_and_permissions(tmp_path: Path) -> None:
     assert loaded == profile
     assert store.list_profiles()[0] == "work"
     if os.name != "nt":
-        if os.name != "nt":
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    else:
-        # Windows uses ACLs rather than POSIX owner/group/other mode bits.
-        assert path.is_file()
     else:
         # Windows uses ACLs rather than POSIX owner/group/other mode bits.
         assert path.is_file()

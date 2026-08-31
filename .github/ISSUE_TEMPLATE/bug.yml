@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible eitaa-next/eitaa-cli problem
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Commands/steps. Remove phone numbers, tokens, OTPs and private message content.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Paste sanitized error output.
+      render: text
+  - type: input
+    id: platform
+    attributes:
+      label: Platform / Python
+      placeholder: Windows 11 / Python 3.13
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - dialogs/channels
+        - peer resolution
+        - messaging
+        - media/downloads
+        - scheduling
+        - sync/events
+        - automation/n8n
+        - authentication
+        - CLI/UI
+        - protocol/raw API
+        - other
