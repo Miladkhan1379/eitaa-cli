@@ -1,7 +1,40 @@
 # Changelog
 
-## 0.5.0
+## 0.9.0
 
+### Added
+- Interactive source/channel/group picker with `eitaa sources pick`.
+- Durable bulk-media download jobs with SQLite deduplication, retry state and media filters.
+- Hybrid `updates.getDifference` probing plus durable polling fallback.
+- Multi-account account/fleet commands.
+- Linux user-systemd and Windows Task Scheduler service helpers.
+- Local web dashboard with quick actions, `/healthz` and Prometheus-style `/metrics`.
+- Interactive automation wizard.
+- Importable n8n starter workflow.
+
+### Reliability
+- Hybrid mode keeps polling as a safety net.
+- `updates.differenceTooLong` falls back to polling recovery.
+- Download resume is message/job-level and verifies completed files still exist.
+- Multi-account sync state is isolated per profile.
+
+### Security
+- The dashboard is localhost-only by default.
+- Non-local dashboard binding requires an access token.
+
+## 0.8.1
+- Added shell-friendly peer normalization and PowerShell-safe username handling.
+
+## 0.8.0
+- Added readable CLI tables, source registry/aliases, improved GitHub CI/templates, and source resolution helpers.
+
+## 0.7.0
+- Added SQLite sync state, idempotent action delivery ledger, edit detection, and n8n webhook support.
+
+## 0.6.0
+- Added server-side scheduled messaging/media helpers, archive/folder helpers, bulk media helpers, and the first automation layer.
+
+## 0.5.0
 - Refactored the package around an async-first client lifecycle and async session-store methods.
 - Added strict mypy configuration and eliminated `Any` from production code.
 - Added typed TL, entity, dialog, message, auth, session, schema, HTTP-header, and app-metadata `TypedDict` definitions.
@@ -14,51 +47,22 @@
 - Added architecture/typing and HTTP-profile documentation plus regression tests for request metadata.
 
 ## 0.4.0
-
-- Added a structured error model with stable OTP failure reasons and machine-readable `to_dict()` output.
-- Added exact retry-delay parsing for `FLOOD_WAIT_*`, explicit wait prose, and HTTP `Retry-After` headers.
-- Added actionable CLI reports for OTP rate limits, invalid/expired codes, invalid hashes, invalid/banned numbers, password requirements, delivery failures, and auth restarts.
-- Improved generic handling for transport failures, permission errors, server errors, peer resolution, missing files, invalid input, and unauthenticated profiles.
-- Successful OTP challenges now explain that request acceptance is not delivery confirmation and print the exact resend cooldown in human and raw seconds.
-- Added dedicated error-handling documentation and retry-policy guidance for automation.
-- Expanded the test suite to cover retry parsing, OTP classification, report generation, HTTP retry headers, and service-level translation.
+- Added structured OTP/RPC error reporting and machine-readable error output.
+- Added retry-delay parsing for Eitaa rate limits and HTTP `Retry-After`.
+- Improved actionable authentication, permission, transport, peer and file errors.
+- Expanded retry/error regression tests.
 
 ## 0.3.0
-
-- Added a typed `SearchService` with Eitaa-specific private, public, and global
-  message discovery through `messages.searchGlobalExt`.
-- Recovered and documented the browser client's search scope and media flag bits.
-- Added `explore search`, `explore entities`, `explore all`, `explore username`,
-  `explore top`, and `explore members` commands.
-- Added robust global-search cursors using date, peer, and message ID.
-- Expanded chat-local search with sender, date, topic, pagination, and 17 typed
-  content filters.
-- Expanded participant exploration with recent/search/contacts/admins/bots/
-  banned/kicked/mentions filters.
-- Added typed OTP models for SMS, voice call, flash call, and in-app delivery.
-- Kept SMS as the default preference while accurately reporting that Eitaa
-  controls the actual delivery channel.
-- Added `auth methods`, `auth resend-code`, flash-call capability flags, and
-  split-step login using `--phone-code-hash`.
-- Split authentication, exploration, and shared CLI runtime code into cohesive
-  modules.
-- Added detailed authentication and search/exploration manuals and examples.
-- Expanded the test suite to 25 passing tests plus the opt-in private HAR test.
+- Added typed private/public/global search and Eitaa-specific content filters.
+- Added entity, username, frequent-peer and participant exploration.
+- Added typed OTP models and resend/fallback flows.
+- Expanded authentication/search documentation and tests.
 
 ## 0.2.0
-
-- Added `chats` command group with all/private/type-filtered listings and full
-  conversation information.
-- Added `groups list` for classic groups and supergroups.
-- Added `channels list` for broadcast channels.
-- Added local title/name/username/phone search and unread-only filtering.
-- Improved chat tables with type, username, preview, and reusable peer reference.
-- Added authoritative JSON and human-readable TL schema artifacts.
-- Added `schema stats`, `schema constructors`, and `schema export` commands.
-- Documented that the supplied Eitaa client does not use Protocol Buffers.
-- Added a complete MkDocs-based user/developer documentation set.
+- Added typed chat/group/channel listing and reusable peer references.
+- Added local filtering and unread-only listing.
+- Added schema inspection/export commands and MkDocs documentation.
 
 ## 0.1.0
-
-- Initial direct TL-over-HTTPS client, authentication, messaging, media, contacts,
+- Initial direct TL-over-HTTPS client with authentication, messaging, media, contacts,
   groups/channels, links, raw invocation, and capture-compatible codec.

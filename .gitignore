@@ -1,15 +1,44 @@
 .venv/
 __pycache__/
 *.py[cod]
+
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
 dist/
 build/
 *.egg-info/
+
 .env
+.env.*
+!.env.example
+
 .eitaa/
 .eitaa-session.json
 *.har
-*.zip
+
+# Eitaa Next local runtime/state
+.eitaa-next.db
+.eitaa-next.db-*
+.eitaa-next.db-shm
+.eitaa-next.db-wal
+.eitaa-next-service/
+.eitaa-next-backup/
+automations.json
+
+# User-generated output
 downloads/
+exports/
+logs/
+
+# Local/archive artifacts
+*.zip
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
